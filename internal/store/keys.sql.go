@@ -11,6 +11,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimInvite = `-- name: ClaimInvite :one
+UPDATE group_keys SET status = 'claimed', updated_at = now()
+WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pending'
+RETURNING grant_role
+`
+
+type ClaimInviteParams struct {
+	GroupID   uuid.UUID
+	PublicKey []byte
+}
+
+// Marks a pending invite claimed and returns the role the new key gets.
+func (q *Queries) ClaimInvite(ctx context.Context, arg ClaimInviteParams) (*string, error) {
+	row := q.db.QueryRow(ctx, claimInvite, arg.GroupID, arg.PublicKey)
+	var grant_role *string
+	err := row.Scan(&grant_role)
+	return grant_role, err
+}
+
 const getKey = `-- name: GetKey :one
 SELECT role, status FROM group_keys WHERE group_id = $1 AND public_key = $2
 `
@@ -30,6 +49,32 @@ func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, erro
 	var i GetKeyRow
 	err := row.Scan(&i.Role, &i.Status)
 	return i, err
+}
+
+const insertInvite = `-- name: InsertInvite :execrows
+INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role)
+VALUES ($1, $2, 'invite', 'pending', $3, $4)
+ON CONFLICT DO NOTHING
+`
+
+type InsertInviteParams struct {
+	GroupID   uuid.UUID
+	PublicKey []byte
+	CreatedBy []byte
+	GrantRole *string
+}
+
+func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertInvite,
+		arg.GroupID,
+		arg.PublicKey,
+		arg.CreatedBy,
+		arg.GrantRole,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertKey = `-- name: InsertKey :execrows
@@ -57,19 +102,27 @@ func (q *Queries) InsertKey(ctx context.Context, arg InsertKeyParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
-const setInviteStatus = `-- name: SetInviteStatus :execrows
-UPDATE group_keys SET status = $3, updated_at = now()
+const revokeInvite = `-- name: RevokeInvite :execrows
+UPDATE group_keys SET status = 'revoked', updated_at = now()
 WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pending'
+  AND ($3::boolean OR created_by = $4)
 `
 
-type SetInviteStatusParams struct {
-	GroupID   uuid.UUID
-	PublicKey []byte
-	NewStatus string
+type RevokeInviteParams struct {
+	GroupID    uuid.UUID
+	PublicKey  []byte
+	AnyCreator bool
+	Caller     []byte
 }
 
-func (q *Queries) SetInviteStatus(ctx context.Context, arg SetInviteStatusParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setInviteStatus, arg.GroupID, arg.PublicKey, arg.NewStatus)
+// The admin revokes any pending invite, a member only those it created.
+func (q *Queries) RevokeInvite(ctx context.Context, arg RevokeInviteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeInvite,
+		arg.GroupID,
+		arg.PublicKey,
+		arg.AnyCreator,
+		arg.Caller,
+	)
 	if err != nil {
 		return 0, err
 	}

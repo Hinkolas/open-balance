@@ -32,6 +32,9 @@ public enum EventData: Sendable, Equatable {
     case memberInviteRenewed(MemberInviteRenewed)
     case memberClaimed(MemberClaimed)
     case memberUpdated(MemberUpdated)
+    case memberDeviceInvited(MemberDeviceInvite)
+    case memberDeviceClaimed(MemberDeviceClaimed)
+    case memberDeviceInviteRevoked(MemberDeviceInvite)
     case paymentCreated(Payment)
     case paymentUpdated(Payment)
     case paymentDeleted(PaymentDeleted)
@@ -47,6 +50,9 @@ public enum EventData: Sendable, Equatable {
         case .memberInviteRenewed: "member.invite_renewed"
         case .memberClaimed: "member.claimed"
         case .memberUpdated: "member.updated"
+        case .memberDeviceInvited: "member.device_invited"
+        case .memberDeviceClaimed: "member.device_claimed"
+        case .memberDeviceInviteRevoked: "member.device_invite_revoked"
         case .paymentCreated: "payment.created"
         case .paymentUpdated: "payment.updated"
         case .paymentDeleted: "payment.deleted"
@@ -120,6 +126,30 @@ public struct MemberUpdated: Codable, Sendable, Equatable {
     public init(id: MemberID, name: String) {
         self.id = id
         self.name = name
+    }
+}
+
+/// `member.device_invited` and `member.device_invite_revoked` (§7.3).
+public struct MemberDeviceInvite: Codable, Sendable, Equatable {
+    public var id: MemberID
+    public var inviteKey: String
+    public init(id: MemberID, inviteKey: String) {
+        self.id = id
+        self.inviteKey = inviteKey
+    }
+}
+
+/// `member.device_claimed` (§7.3): one more key for a claimed member.
+public struct MemberDeviceClaimed: Codable, Sendable, Equatable {
+    public var id: MemberID
+    public var key: String
+    public var inviteKey: String
+    public var inviteSig: String
+    public init(id: MemberID, key: String, inviteKey: String, inviteSig: String) {
+        self.id = id
+        self.key = key
+        self.inviteKey = inviteKey
+        self.inviteSig = inviteSig
     }
 }
 
@@ -234,6 +264,8 @@ public enum EventCoding {
         case .memberInviteRenewed(let d): return try enc(d)
         case .memberClaimed(let d): return try enc(d)
         case .memberUpdated(let d): return try enc(d)
+        case .memberDeviceInvited(let d), .memberDeviceInviteRevoked(let d): return try enc(d)
+        case .memberDeviceClaimed(let d): return try enc(d)
         case .paymentCreated(let d), .paymentUpdated(let d): return try enc(d)
         case .paymentDeleted(let d): return try enc(d)
         case .arrivalRecorded(let d): return try enc(d)
@@ -257,6 +289,9 @@ public enum EventCoding {
         case "member.invite_renewed": .memberInviteRenewed(try dec(MemberInviteRenewed.self))
         case "member.claimed": .memberClaimed(try dec(MemberClaimed.self))
         case "member.updated": .memberUpdated(try dec(MemberUpdated.self))
+        case "member.device_invited": .memberDeviceInvited(try dec(MemberDeviceInvite.self))
+        case "member.device_claimed": .memberDeviceClaimed(try dec(MemberDeviceClaimed.self))
+        case "member.device_invite_revoked": .memberDeviceInviteRevoked(try dec(MemberDeviceInvite.self))
         case "payment.created": .paymentCreated(try dec(Payment.self))
         case "payment.updated": .paymentUpdated(try dec(Payment.self))
         case "payment.deleted": .paymentDeleted(try dec(PaymentDeleted.self))

@@ -14,6 +14,9 @@ public struct GroupCredentials: Codable, Sendable, Equatable, Identifiable {
     /// Invite seeds of members this device (as admin) added and that have not
     /// claimed yet, so their QR can be shown again.
     public var invites: [MemberID: Data] = [:]
+    /// Seed of the pending invite this device made for a further device of
+    /// its own member, so its QR can be shown again.
+    public var deviceInvite: Data?
     /// The server accepted our member key (claim done or we created the group).
     public var registered: Bool
     public var addedAt: Date

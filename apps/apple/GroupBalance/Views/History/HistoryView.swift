@@ -89,6 +89,12 @@ struct HistoryView: View {
         case .memberInviteRenewed(let d): return String(localized: "\(who) renewed the invite of \(session.state.members[d.id]?.name ?? "")")
         case .memberClaimed(let d): return String(localized: "\(session.state.members[d.id]?.name ?? "") joined")
         case .memberUpdated(let d): return String(localized: "\(who) renamed a member to \(d.name)")
+        case .memberDeviceInvited: return String(localized: "\(who) created a QR code for another device")
+        case .memberDeviceClaimed: return String(localized: "\(who) added another device")
+        case .memberDeviceInviteRevoked(let d):
+            return d.id == item.author
+                ? String(localized: "\(who) revoked a QR code for another device")
+                : String(localized: "\(who) revoked a device QR code of \(session.state.members[d.id]?.name ?? "")")
         case .paymentCreated(let p): return String(localized: "\(who) added “\(p.title)”")
         case .paymentUpdated(let p): return String(localized: "\(who) edited “\(p.title)”")
         case .paymentDeleted(let d): return String(localized: "\(who) deleted “\(title(d.id))”")

@@ -22,7 +22,7 @@ struct JoinSheet: View {
                     Section {
                         LabeledContent("Server", value: link.server.host() ?? link.server.absoluteString)
                     } footer: {
-                        Text("You join as the member the admin created for you. Your key stays on your devices and in your iCloud Keychain.")
+                        Text("You join as the member this invite is for. Your key stays on your devices and in your iCloud Keychain.")
                     }
                 } else {
                     #if canImport(VisionKit) && os(iOS)

@@ -34,9 +34,11 @@ public struct ServerClient: Sendable {
                                       body: ["groupId": groupID.lower, "adminKey": adminKey.base64URL])
     }
 
-    public func createInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data) async throws {
+    /// `role` is what the claimed key gets on the server: `member`, or `admin`
+    /// for the admin's own further devices (PROTOCOL.md §5.3).
+    public func createInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data, role: String = "member") async throws {
         let _: Empty = try await send("POST", "/v1/groups/\(groupID.lower)/invites", auth: .key(signer),
-                                      body: ["inviteKey": inviteKey.base64URL])
+                                      body: ["inviteKey": inviteKey.base64URL, "role": role])
     }
 
     public func revokeInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data) async throws {

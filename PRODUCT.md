@@ -36,6 +36,8 @@ counts once its arrival is confirmed, instalment by instalment.
 - Payments are recorded right after an invoice is paid or a bill is split,
   often on the phone, sometimes days later.
 - Joining is by a per-member invite QR code the admin shows; no accounts.
+  Several people can share one member (e.g. a company's partners): any
+  device of the member shows a one-time QR for a further device.
 - The server owner (admin token) creates groups; the group creator is admin.
 
 ## Capabilities and Constraints

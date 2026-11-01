@@ -70,8 +70,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/admin/groups", s.owner(s.listGroups))
 	mux.HandleFunc("DELETE /v1/admin/groups/{group}", s.owner(s.deleteGroup))
 
-	mux.HandleFunc("POST /v1/groups/{group}/invites", s.signed(roleAdmin, s.createInvite))
-	mux.HandleFunc("DELETE /v1/groups/{group}/invites/{key}", s.signed(roleAdmin, s.revokeInvite))
+	mux.HandleFunc("POST /v1/groups/{group}/invites", s.signed(roleMember, s.createInvite))
+	mux.HandleFunc("DELETE /v1/groups/{group}/invites/{key}", s.signed(roleMember, s.revokeInvite))
 	mux.HandleFunc("POST /v1/groups/{group}/claim", s.signed(roleInvite, s.claim))
 	mux.HandleFunc("POST /v1/groups/{group}/events", s.signed(roleMember, s.appendEvents))
 	mux.HandleFunc("GET /v1/groups/{group}/events", s.signed(roleMember, s.readEvents))
@@ -107,7 +107,6 @@ type role int
 
 const (
 	roleMember role = iota // admin or member, active
-	roleAdmin              // admin, active
 	roleInvite             // invite, pending
 )
 
@@ -158,8 +157,6 @@ func (s *Server) signed(need role, next signedHandler) http.HandlerFunc {
 		switch need {
 		case roleMember:
 			allowed = (k.Role == "admin" || k.Role == "member") && k.Status == "active"
-		case roleAdmin:
-			allowed = k.Role == "admin" && k.Status == "active"
 		case roleInvite:
 			allowed = k.Role == "invite" && k.Status == "pending"
 		}

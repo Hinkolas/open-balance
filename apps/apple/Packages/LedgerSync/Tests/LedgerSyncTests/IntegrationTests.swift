@@ -59,6 +59,40 @@ func twoDevicesShareALedger() async throws {
     #expect(ben.state.summary.transfers == [.init(from: a, to: b, amount: 40_000)])
     #expect(ben.state == jonas.state)
 
+    // Ben is a company: his partner joins as a second device of the same member.
+    let deviceLink = try await ben.addDevice()
+    #expect(try await ben.addDevice() == deviceLink) // shown again, not a new invite
+    let partner = try await GroupSession.join(try #require(InviteLink(deviceLink.url)), store: MemoryCredentialStore(),
+                                              cacheRoot: tmp.appending(path: "partner"))
+    #expect(partner.me == b)
+    #expect(partner.state.members[b]?.keys.count == 2)
+    try partner.submit(.memberUpdated(.init(id: b, name: "Ben & Co")))
+    try await partner.syncNow()
+    try await jonas.syncNow()
+    #expect(jonas.state.members[b]?.name == "Ben & Co")
+    #expect(jonas.state.history.allSatisfy { $0.rejection == nil })
+
+    // Used invites aren't shown again; a revoked one stops working.
+    try await ben.syncNow()
+    #expect(ben.deviceInviteLink() == nil)
+    let spare = try await ben.addDevice()
+    try await ben.revokeDeviceInvite()
+    #expect(ben.deviceInviteLink() == nil)
+    await #expect(throws: FlowError.inviteUsed) {
+        _ = try await GroupSession.join(spare, store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "spare"))
+    }
+
+    // The admin's second device is admin too: in the ledger, and on the server
+    // it may revoke the invite the first device made when it renews it.
+    _ = try await jonas.addMember(name: "Cem")
+    let cem = try #require(jonas.state.members.values.first { $0.name == "Cem" }?.id)
+    let jonasLink = try await jonas.addDevice()
+    let jonas2 = try await GroupSession.join(jonasLink, store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "jonas2"))
+    #expect(jonas2.isAdmin)
+    _ = try await jonas2.renewInvite(for: cem)
+    try await jonas.syncNow()
+    #expect(jonas.state.history.allSatisfy { $0.rejection == nil })
+
     // A third device of nobody can't read.
     let eve = ServerClient(base: server)
     await #expect(throws: ServerError.self) {

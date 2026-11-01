@@ -140,8 +140,6 @@ func TestGroupLifecycle(t *testing.T) {
 	expect("claim", st, 200)
 	st, _ = c.do("POST", g+"/claim", invite, false, map[string]any{"memberKey": pubB64(newKey()), "proof": protocol.B64.EncodeToString(proof)})
 	expect("claim twice", st, 403)
-	st, _ = c.do("POST", g+"/invites", member, false, map[string]any{"inviteKey": pubB64(newKey())})
-	expect("member invites", st, 403)
 	st, _ = c.do("POST", g+"/events", member, false, map[string]any{"events": []any{
 		map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(3)},
 		map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(4)},
@@ -177,6 +175,81 @@ func TestGroupLifecycle(t *testing.T) {
 	expect("owner deletes", st, 204)
 	st, _ = c.do("GET", g+"/events", member, false, nil)
 	expect("read deleted group", st, 403)
+}
+
+// Members invite further devices of their own (§5.2, §5.4 step 5).
+func TestDeviceInvites(t *testing.T) {
+	c := client{t, testServer(t)}
+	group := uuid.Must(uuid.NewV7())
+	g := "/v1/groups/" + group.String()
+	admin := newKey()
+
+	expect := func(what string, got, want int) {
+		t.Helper()
+		if got != want {
+			t.Fatalf("%s: status %d, want %d", what, got, want)
+		}
+	}
+	invite := func(by ed25519.PrivateKey, role string) (ed25519.PrivateKey, int) {
+		t.Helper()
+		k := newKey()
+		body := map[string]any{"inviteKey": pubB64(k)}
+		if role != "" {
+			body["role"] = role
+		}
+		st, _ := c.do("POST", g+"/invites", by, false, body)
+		return k, st
+	}
+	claim := func(inv ed25519.PrivateKey) ed25519.PrivateKey {
+		t.Helper()
+		dev := newKey()
+		proof := ed25519.Sign(dev, protocol.ClaimInput(group, inv.Public().(ed25519.PublicKey)))
+		st, _ := c.do("POST", g+"/claim", inv, false, map[string]any{"memberKey": pubB64(dev), "proof": protocol.B64.EncodeToString(proof)})
+		expect("claim", st, 200)
+		return dev
+	}
+	revoke := func(by, inv ed25519.PrivateKey) int {
+		t.Helper()
+		st, _ := c.do("DELETE", g+"/invites/"+pubB64(inv), by, false, nil)
+		return st
+	}
+	appendOK := func(what string, by ed25519.PrivateKey) {
+		t.Helper()
+		st, _ := c.do("POST", g+"/events", by, false, map[string]any{"events": []any{map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(1)}}})
+		expect(what, st, 200)
+	}
+
+	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin)})
+	expect("create", st, 201)
+	inv, st := invite(admin, "")
+	expect("admin invites", st, 201)
+	memberKey := claim(inv)
+
+	// A member invites its second device; the device can write.
+	_, st = invite(memberKey, "admin")
+	expect("member grants admin", st, 403)
+	_, st = invite(memberKey, "owner")
+	expect("unknown role", st, 400)
+	devInv, st := invite(memberKey, "member")
+	expect("member invites a device", st, 201)
+	device2 := claim(devInv)
+	appendOK("second device appends", device2)
+
+	// Revoking: the creator and the admin may, other members may not.
+	pending, _ := invite(memberKey, "")
+	expect("other device revokes", revoke(device2, pending), 404)
+	expect("admin revokes", revoke(admin, pending), 204)
+	own, _ := invite(memberKey, "")
+	expect("creator revokes", revoke(memberKey, own), 204)
+	expect("revoke twice", revoke(memberKey, own), 404)
+
+	// The admin's own second device is admin on the server too.
+	adminInv, st := invite(admin, "admin")
+	expect("admin grants admin", st, 201)
+	adminDevice2 := claim(adminInv)
+	other, _ := invite(memberKey, "")
+	expect("admin's second device revokes", revoke(adminDevice2, other), 204)
+	appendOK("admin's second device appends", adminDevice2)
 }
 
 func TestStreamWakesOnAppend(t *testing.T) {

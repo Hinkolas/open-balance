@@ -4,12 +4,13 @@ import LedgerCore
 import LedgerSync
 import SwiftUI
 
-/// Members and invites, this group's settings, your groups, your servers.
+/// Members, invites and devices, this group's settings, your groups, your servers.
 struct GroupView: View {
     let session: GroupSession
     @Environment(AppModel.self) private var model
     @State private var addingMember = false
     @State private var invite: InviteLink?
+    @State private var deviceInvite: InviteLink?
     @State private var renaming: RenameTarget?
     @State private var joining = false
     @State private var creating = false
@@ -61,6 +62,7 @@ struct GroupView: View {
         .navigationTitle("Group")
         .sheet(isPresented: $addingMember) { AddMemberSheet(session: session) }
         .sheet(item: $invite) { InviteQRSheet(session: session, link: $0) }
+        .sheet(item: $deviceInvite) { DeviceInviteSheet(session: session, link: $0) }
         .sheet(item: $renaming) { RenameSheet(session: session, target: $0) }
         .sheet(isPresented: $joining) { JoinSheet(link: nil) }
         .sheet(isPresented: $creating) { CreateGroupSheet() }
@@ -84,7 +86,7 @@ struct GroupView: View {
                     MemberAvatar(m.initial, isMe: m.id == session.me)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(session.name(m.id))
-                        Text(m.isAdmin ? String(localized: "Admin") : m.isClaimed ? String(localized: "Joined") : String(localized: "Invited, not joined yet"))
+                        Text(status(m))
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -99,6 +101,9 @@ struct GroupView: View {
                     if session.isAdmin || m.id == session.me {
                         Button("Rename", systemImage: "pencil") { renaming = .member(m.id, m.name) }
                     }
+                    if m.id == session.me {
+                        Button("Add a device", systemImage: "qrcode") { showDeviceInvite() }
+                    }
                 }
                 .swipeActions {
                     if session.isAdmin || m.id == session.me {
@@ -109,11 +114,29 @@ struct GroupView: View {
             if session.isAdmin {
                 Button("Add member", systemImage: "person.badge.plus") { addingMember = true }
             }
+            Button("Add a device", systemImage: "qrcode") { showDeviceInvite() }
         } header: {
             Text("Members")
         } footer: {
-            if session.isAdmin {
-                Text("Each member joins with their own one-time QR code.")
+            Text(session.isAdmin
+                 ? String(localized: "Each member joins with their own one-time QR code. Add a device to share your member with someone else, for example a partner in your company.")
+                 : String(localized: "Add a device to share your member with someone else, for example a partner in your company."))
+        }
+    }
+
+    /// "Admin · 2 devices", "Joined", "Invited, not joined yet".
+    private func status(_ m: Member) -> String {
+        let role = m.isAdmin ? String(localized: "Admin") : m.isClaimed ? String(localized: "Joined") : String(localized: "Invited, not joined yet")
+        guard m.keys.count > 1 else { return role }
+        return String(localized: "\(role) · \(m.keys.count) devices")
+    }
+
+    private func showDeviceInvite() {
+        Task {
+            do {
+                deviceInvite = try await session.addDevice()
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }
@@ -259,17 +282,57 @@ struct InviteQRSheet: View {
     }
 }
 
-struct InviteQRContent: View {
+/// The QR for a further device of your own member, with a way to withdraw it.
+struct DeviceInviteSheet: View {
     let session: GroupSession
     let link: InviteLink
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmRevoke = false
+    @State private var working = false
+
+    var body: some View {
+        NavigationStack {
+            InviteQRContent(session: session, link: link, isDevice: true) {
+                Button("Revoke this QR code", systemImage: "xmark.circle", role: .destructive) { confirmRevoke = true }
+                    .disabled(working)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .confirmationDialog("Revoke this QR code?", isPresented: $confirmRevoke, titleVisibility: .visible) {
+                Button("Revoke", role: .destructive) { revoke() }
+            } message: {
+                Text("Nobody can join with it any more. Devices that already joined stay.")
+            }
+        }
+    }
+
+    private func revoke() {
+        working = true
+        Task {
+            defer { working = false }
+            try? await session.revokeDeviceInvite()
+            dismiss()
+        }
+    }
+}
+
+struct InviteQRContent<Footer: View>: View {
+    let session: GroupSession
+    let link: InviteLink
+    var isDevice = false
+    @ViewBuilder var footer: Footer
     @State private var copied = false
 
     var body: some View {
+        let name = session.name(link.memberID)
+        let me = session.state.members[session.me]?.name ?? ""
         ScrollView {
             VStack(spacing: 20) {
                 VStack(spacing: 6) {
-                    Text("Invite \(session.name(link.memberID))").font(.title2.bold())
-                    Text("Let \(session.name(link.memberID)) scan this with the iPhone camera. It works once and contains the group's key, so show it only to them.")
+                    Text(isDevice ? String(localized: "Add a device") : String(localized: "Invite \(name)")).font(.title2.bold())
+                    Text(isDevice
+                         ? String(localized: "Scan this on the other device. It joins as \(me): it sees the group and writes as \(me). It works once, so show it only to the person you mean.")
+                         : String(localized: "Let \(name) scan this with the iPhone camera. It works once and contains the group's key, so show it only to them."))
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 if let image = QRCode.image(link.url.absoluteString) {
@@ -291,11 +354,18 @@ struct InviteQRContent: View {
                     }
                     .buttonStyle(.bordered)
                 }
+                footer
             }
             .padding(24)
             .frame(maxWidth: .infinity)
         }
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+extension InviteQRContent where Footer == EmptyView {
+    init(session: GroupSession, link: InviteLink) {
+        self.init(session: session, link: link, footer: { EmptyView() })
     }
 }
 

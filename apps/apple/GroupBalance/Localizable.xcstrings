@@ -11,6 +11,16 @@
         }
       }
     },
+    "%@ added another device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat ein weiteres Gerät hinzugefügt"
+          }
+        }
+      }
+    },
     "%@ added “%@”": {
       "localizations": {
         "de": {
@@ -37,6 +47,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ hat bestätigt, dass Geld bei %2$@ angekommen ist (für „%3$@“)"
+          }
+        }
+      }
+    },
+    "%@ created a QR code for another device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat einen QR-Code für ein weiteres Gerät erstellt"
           }
         }
       }
@@ -181,6 +201,26 @@
         }
       }
     },
+    "%@ revoked a QR code for another device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat einen QR-Code für ein weiteres Gerät zurückgezogen"
+          }
+        }
+      }
+    },
+    "%@ revoked a device QR code of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat einen Geräte-QR-Code von %2$@ zurückgezogen"
+          }
+        }
+      }
+    },
     "%@ too much.": {
       "localizations": {
         "de": {
@@ -217,6 +257,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ · %2$@ → %3$@"
+          }
+        }
+      }
+    },
+    "%@ · %lld devices": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld Geräte"
           }
         }
       }
@@ -267,6 +317,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eintragen"
+          }
+        }
+      }
+    },
+    "Add a device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerät hinzufügen"
+          }
+        }
+      }
+    },
+    "Add a device to share your member with someone else, for example a partner in your company.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge ein Gerät hinzu, um dein Mitglied mit jemandem zu teilen, zum Beispiel mit einem Partner in deiner Firma."
           }
         }
       }
@@ -601,12 +671,12 @@
         }
       }
     },
-    "Each member joins with their own one-time QR code.": {
+    "Each member joins with their own one-time QR code. Add a device to share your member with someone else, for example a partner in your company.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jedes Mitglied tritt mit einem eigenen, einmaligen QR-Code bei."
+            "value": "Jedes Mitglied tritt mit einem eigenen, einmaligen QR-Code bei. Füge ein Gerät hinzu, um dein Mitglied mit jemandem zu teilen, zum Beispiel mit einem Partner in deiner Firma."
           }
         }
       }
@@ -1051,6 +1121,16 @@
         }
       }
     },
+    "Nobody can join with it any more. Devices that already joined stay.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niemand kann damit mehr beitreten. Geräte, die schon beigetreten sind, bleiben."
+          }
+        }
+      }
+    },
     "Nobody owes anybody anything from this.": {
       "localizations": {
         "de": {
@@ -1321,6 +1401,36 @@
         }
       }
     },
+    "Revoke": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurückziehen"
+          }
+        }
+      }
+    },
+    "Revoke this QR code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-Code zurückziehen"
+          }
+        }
+      }
+    },
+    "Revoke this QR code?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-Code zurückziehen?"
+          }
+        }
+      }
+    },
     "Same as received.": {
       "localizations": {
         "de": {
@@ -1347,6 +1457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR-Code scannen"
+          }
+        }
+      }
+    },
+    "Scan this on the other device. It joins as %@: it sees the group and writes as %@. It works once, so show it only to the person you mean.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanne das auf dem anderen Gerät. Es tritt als %1$@ bei: Es sieht die Gruppe und schreibt als %2$@. Der Code funktioniert einmal, zeig ihn also nur der Person, die du meinst."
           }
         }
       }
@@ -1581,12 +1701,12 @@
         }
       }
     },
-    "This invite has already been used. Ask the admin for a new one.": {
+    "This invite has already been used or was revoked. Ask for a new one.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Einladung wurde schon benutzt. Bitte den Admin um eine neue."
+            "value": "Diese Einladung wurde schon benutzt oder zurückgezogen. Bitte um eine neue."
           }
         }
       }
@@ -1861,12 +1981,12 @@
         }
       }
     },
-    "You join as the member the admin created for you. Your key stays on your devices and in your iCloud Keychain.": {
+    "You join as the member this invite is for. Your key stays on your devices and in your iCloud Keychain.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du trittst als das Mitglied bei, das der Admin für dich angelegt hat. Dein Schlüssel bleibt auf deinen Geräten und in deinem iCloud-Schlüsselbund."
+            "value": "Du trittst als das Mitglied bei, für das diese Einladung ist. Dein Schlüssel bleibt auf deinen Geräten und in deinem iCloud-Schlüsselbund."
           }
         }
       }

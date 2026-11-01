@@ -21,8 +21,8 @@ of ciphertext and never sees names or amounts.
 | Server | Go, net/http, sqlc + pgx/v5, Postgres 17, headless JSON API, hosted on skali | |
 | Hosting model | Bring your own server. Only the server owner (`ADMIN_TOKEN`) creates groups | |
 | Crypto | HKDF-SHA256, ChaCha20-Poly1305, Ed25519, SHA-256. CryptoKit on iOS, stdlib + x/crypto in Go | Available natively on every target platform |
-| Identity | One Ed25519 member key per member per group. Signs events (clients verify) and requests (server verifies). No accounts | A member is identified by their key |
-| Joining | Per-member invite only: admin adds and names the member, shows that member's QR (server, group id, member id, group secret, one-time invite key) | One seat, one key; makes removal possible later |
+| Identity | One Ed25519 key per device of a member per group; a member (a person or a company) may have several, all equal. Signs events (clients verify) and requests (server verifies). No accounts | A member is identified by its keys; tracking is per member, not per person |
+| Joining | Per-member invite: admin adds and names the member, shows that member's QR (server, group id, member id, group secret, one-time invite key) for its first device. Further devices: any device of the member shows a one-time device QR for its own member (2026-11-01) | One invite, one key; the admin can't add devices to a member that already joined, so nobody else can speak for it |
 | Permissions | Server: who may read and write (key registry, roles). Clients: content rules, enforced identically, invalid events stay visible | The server can't see content |
 | Content rules | Any member records payments for anyone. Only the receiver (any member for unclaimed seats) or the admin records an arrival. Only the creator or the admin edits or deletes a payment | |
 | Payments | One event type with in split, out split, `track` flag. Income, Expense and Settle up are forms over it | One math rule on every platform; new forms need no protocol change |
@@ -60,8 +60,8 @@ docs/
 ```sql
 groups      (id uuid pk, head_seq bigint, bytes_used bigint, created_at, last_write_at)
 group_keys  (group_id, public_key bytea, role admin|member|invite,
-             status active|pending|claimed|revoked, created_at, claimed_at,
-             pk (group_id, public_key))
+             status active|pending|claimed|revoked, created_by bytea, grant_role,
+             created_at, updated_at, pk (group_id, public_key))
 events      (group_id, seq bigint, id uuid, blob bytea, author_key bytea, received_at,
              pk (group_id, seq), unique (group_id, id))
 ```
@@ -81,6 +81,7 @@ members), and a separate **+**.
 - **Payment detail**: lines, arrivals ("record arrival", instalments),
   edit, delete, edit history.
 - **Members** (admin): add member → name → QR. Renew a lost invite.
+- **Devices** (everyone, own member): add a device → one-time QR, revocable.
 - **Join**: camera scanner or paste a link → claim → "Welcome, Anna".
 - **Servers**: add a server as owner (URL + admin token) to create groups.
 - Offline-first: writes go to an outbox with client ids and apply

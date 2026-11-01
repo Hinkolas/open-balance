@@ -98,9 +98,13 @@ func (s *Server) deleteGroup(w http.ResponseWriter, r *http.Request) {
 
 // ---- invites and claims ----
 
+// createInvite registers an invite key (§5.3). Any member may: the ledger
+// decides whose seat or device it is. Only the admin may grant `admin`, for
+// its own further devices.
 func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, c caller) {
 	var in struct {
 		InviteKey string `json:"inviteKey"`
+		Role      string `json:"role"`
 	}
 	_ = decodeBody(c, &in)
 	key, ok := decodeKey(in.InviteKey)
@@ -108,7 +112,21 @@ func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, c caller) 
 		writeErr(w, http.StatusBadRequest, "bad_request", "inviteKey must be a base64url Ed25519 public key")
 		return
 	}
-	n, err := s.q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "invite", Status: "pending"})
+	grant := in.Role
+	switch grant {
+	case "":
+		grant = "member"
+	case "member":
+	case "admin":
+		if c.role != "admin" {
+			writeErr(w, http.StatusForbidden, "forbidden", "only the admin may create invites that grant admin")
+			return
+		}
+	default:
+		writeErr(w, http.StatusBadRequest, "bad_request", "role must be member or admin")
+		return
+	}
+	n, err := s.q.InsertInvite(r.Context(), store.InsertInviteParams{GroupID: c.group, PublicKey: key, CreatedBy: c.key, GrantRole: &grant})
 	if err != nil {
 		internalErr(w, r, err)
 		return
@@ -126,13 +144,13 @@ func (s *Server) revokeInvite(w http.ResponseWriter, r *http.Request, c caller) 
 		writeErr(w, http.StatusNotFound, "not_found", "unknown invite")
 		return
 	}
-	n, err := s.q.SetInviteStatus(r.Context(), store.SetInviteStatusParams{GroupID: c.group, PublicKey: key, NewStatus: "revoked"})
+	n, err := s.q.RevokeInvite(r.Context(), store.RevokeInviteParams{GroupID: c.group, PublicKey: key, AnyCreator: c.role == "admin", Caller: c.key})
 	if err != nil {
 		internalErr(w, r, err)
 		return
 	}
 	if n == 0 {
-		writeErr(w, http.StatusNotFound, "not_found", "no pending invite with this key")
+		writeErr(w, http.StatusNotFound, "not_found", "no pending invite with this key that you may revoke")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -156,14 +174,17 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
 	}
 	err = pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		n, err := q.SetInviteStatus(r.Context(), store.SetInviteStatusParams{GroupID: c.group, PublicKey: c.key, NewStatus: "claimed"})
-		if err != nil {
+		grant, err := q.ClaimInvite(r.Context(), store.ClaimInviteParams{GroupID: c.group, PublicKey: c.key})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errConflict
+		} else if err != nil {
 			return err
 		}
-		if n == 0 {
-			return errConflict
+		role := "member"
+		if grant != nil {
+			role = *grant
 		}
-		n, err = q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "member", Status: "active"})
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: role, Status: "active"})
 		if err != nil {
 			return err
 		}

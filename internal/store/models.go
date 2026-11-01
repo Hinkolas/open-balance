@@ -33,4 +33,6 @@ type GroupKey struct {
 	Status    string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	CreatedBy []byte
+	GrantRole *string
 }

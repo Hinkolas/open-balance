@@ -34,12 +34,15 @@ public enum Rejection: String, Sendable, Equatable {
 public struct Member: Sendable, Equatable, Identifiable {
     public var id: MemberID
     public var name: String
-    /// Member public key once claimed.
-    public var key: Data?
+    /// Public keys of the member's devices, in the order they joined. Empty
+    /// while unclaimed. Every key writes as the member (§3.2).
+    public var keys: [Data] = []
     /// Current invite public key while unclaimed.
     public var inviteKey: Data?
+    /// Pending invites for further devices (§7.3).
+    public var deviceInvites: [Data] = []
     public var isAdmin: Bool
-    public var isClaimed: Bool { key != nil }
+    public var isClaimed: Bool { !keys.isEmpty }
     public var initial: String { name.first.map { String($0).uppercased() } ?? "·" }
 }
 
@@ -107,7 +110,7 @@ public struct LedgerState: Sendable, Equatable {
         arrivals.values.filter { $0.payment == payment && !$0.removed }.sorted { $0.at < $1.at }
     }
 
-    func key(of member: MemberID) -> Data? { members[member]?.key }
+    func keys(of member: MemberID) -> [Data] { members[member]?.keys ?? [] }
 }
 
 /// Replays events into a `LedgerState` (§8).
@@ -165,11 +168,12 @@ public struct Ledger: Sendable {
             return
         }
 
-        guard let key = authorKey(header: header, data: data) else {
+        let keys = authorKeys(header: header, data: data)
+        guard !keys.isEmpty else {
             item.rejection = .unknownAuthor
             return genesisCheck(e.seq, valid: false)
         }
-        guard LedgerCrypto.verify(signature: sig, body: body, groupID: groupID, eventID: e.id, publicKey: key) else {
+        guard keys.contains(where: { LedgerCrypto.verify(signature: sig, body: body, groupID: groupID, eventID: e.id, publicKey: $0) }) else {
             item.rejection = .badSignature
             return genesisCheck(e.seq, valid: false)
         }
@@ -183,12 +187,13 @@ public struct Ledger: Sendable {
         }
     }
 
-    /// §8.2
-    private func authorKey(header: EventHeader, data: EventData) -> Data? {
+    /// §8.2: the keys the signature may verify with.
+    private func authorKeys(header: EventHeader, data: EventData) -> [Data] {
         switch data {
-        case .groupCreated(let d): Data(base64URL: d.admin.key)
-        case .memberClaimed(let d): Data(base64URL: d.key)
-        default: state.key(of: header.author)
+        case .groupCreated(let d): Data(base64URL: d.admin.key).map { [$0] } ?? []
+        case .memberClaimed(let d): Data(base64URL: d.key).map { [$0] } ?? []
+        case .memberDeviceClaimed(let d): Data(base64URL: d.key).map { [$0] } ?? []
+        default: state.keys(of: header.author)
         }
     }
 
@@ -220,7 +225,7 @@ public struct Ledger: Sendable {
             state.name = d.name
             state.currency = d.currency
             state.adminID = d.admin.id
-            addMember(Member(id: d.admin.id, name: d.admin.name, key: key, inviteKey: nil, isAdmin: true))
+            addMember(Member(id: d.admin.id, name: d.admin.name, keys: [key], isAdmin: true))
 
         case .groupUpdated(let d):
             guard isAdmin else { return .forbidden }
@@ -231,7 +236,7 @@ public struct Ledger: Sendable {
             guard isAdmin else { return .forbidden }
             guard state.members[d.id] == nil else { return .duplicateID }
             guard Self.validName(d.name), let key = Data(base64URL: d.inviteKey), key.count == 32, !keyInUse(key) else { return .invalidData }
-            addMember(Member(id: d.id, name: d.name, key: nil, inviteKey: key, isAdmin: false))
+            addMember(Member(id: d.id, name: d.name, inviteKey: key, isAdmin: false))
 
         case .memberInviteRenewed(let d):
             guard isAdmin else { return .forbidden }
@@ -245,11 +250,8 @@ public struct Ledger: Sendable {
             guard h.author == d.id else { return .forbidden }
             guard !m.isClaimed else { return .alreadyClaimed }
             guard let key = Data(base64URL: d.key), key.count == 32, !keyInUse(key) else { return .invalidData }
-            guard let invite = m.inviteKey, let sig = Data(base64URL: d.inviteSig),
-                  let inviteKey = try? Curve25519.Signing.PublicKey(rawRepresentation: invite),
-                  inviteKey.isValidSignature(sig, for: LedgerCrypto.claimInput(groupID: groupID, key: key))
-            else { return .badInviteSig }
-            state.members[d.id]?.key = key
+            guard let invite = m.inviteKey, inviteSigned(d.inviteSig, by: invite, key: key) else { return .badInviteSig }
+            state.members[d.id]?.keys = [key]
             state.members[d.id]?.inviteKey = nil
 
         case .memberUpdated(let d):
@@ -257,6 +259,29 @@ public struct Ledger: Sendable {
             guard isAdmin || h.author == d.id else { return .forbidden }
             guard Self.validName(d.name) else { return .invalidData }
             state.members[d.id]?.name = d.name
+
+        case .memberDeviceInvited(let d):
+            // Only the member itself; the admin adds a first device through member.added.
+            guard state.members[d.id] != nil else { return .unknownTarget }
+            guard h.author == d.id else { return .forbidden }
+            guard let key = Data(base64URL: d.inviteKey), key.count == 32, !keyInUse(key) else { return .invalidData }
+            state.members[d.id]?.deviceInvites.append(key)
+
+        case .memberDeviceClaimed(let d):
+            guard let m = state.members[d.id] else { return .unknownTarget }
+            guard h.author == d.id else { return .forbidden }
+            guard let key = Data(base64URL: d.key), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let invite = Data(base64URL: d.inviteKey), m.deviceInvites.contains(invite),
+                  inviteSigned(d.inviteSig, by: invite, key: key)
+            else { return .badInviteSig }
+            state.members[d.id]?.keys.append(key)
+            state.members[d.id]?.deviceInvites.removeAll { $0 == invite }
+
+        case .memberDeviceInviteRevoked(let d):
+            guard let m = state.members[d.id] else { return .unknownTarget }
+            guard isAdmin || h.author == d.id else { return .forbidden }
+            guard let invite = Data(base64URL: d.inviteKey), m.deviceInvites.contains(invite) else { return .unknownTarget }
+            state.members[d.id]?.deviceInvites.removeAll { $0 == invite }
 
         case .paymentCreated(let p):
             guard state.payments[p.id] == nil else { return .duplicateID }
@@ -305,7 +330,13 @@ public struct Ledger: Sendable {
     }
 
     private func keyInUse(_ key: Data) -> Bool {
-        state.members.values.contains { $0.key == key || $0.inviteKey == key }
+        state.members.values.contains { $0.keys.contains(key) || $0.inviteKey == key || $0.deviceInvites.contains(key) }
+    }
+
+    /// `inviteSig` (§7.3): the invite key vouches for `key` in this group.
+    private func inviteSigned(_ sig: String, by invite: Data, key: Data) -> Bool {
+        guard let sig = Data(base64URL: sig), let inviteKey = try? Curve25519.Signing.PublicKey(rawRepresentation: invite) else { return false }
+        return inviteKey.isValidSignature(sig, for: LedgerCrypto.claimInput(groupID: groupID, key: key))
     }
 
     public static let maxAmount = 1_000_000_000_000_000

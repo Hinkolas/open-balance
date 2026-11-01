@@ -181,3 +181,61 @@ struct Fixture {
     #expect(other.state.inconsistency != nil)
     #expect(other.state.history.first?.rejection == .decrypt)
 }
+
+/// Further devices of a member (§7.3): a company member shared by two people.
+@Test func memberDevices() throws {
+    var f = try Fixture()
+    let globex = try f.join("Globex")
+    let ben = try f.join("Ben")
+    let pub = { (k: Curve25519.Signing.PrivateKey) in k.publicKey.rawRepresentation }
+    func claim(_ device: Actor, invite: Curve25519.Signing.PrivateKey, signedBy: Curve25519.Signing.PrivateKey? = nil) throws -> Rejection? {
+        let sig = try (signedBy ?? invite).signature(for: LedgerCrypto.claimInput(groupID: f.group, key: pub(device.key)))
+        return try f.write(device, .memberDeviceClaimed(.init(id: globex.id, key: pub(device.key).base64URL,
+                                                              inviteKey: pub(invite).base64URL, inviteSig: sig.base64URL)))
+    }
+
+    // Only the member itself invites its devices, not the admin or others.
+    let invite = Curve25519.Signing.PrivateKey()
+    let deviceInvite = EventData.memberDeviceInvited(.init(id: globex.id, inviteKey: pub(invite).base64URL))
+    #expect(try f.write(f.admin, deviceInvite) == .forbidden)
+    #expect(try f.write(ben, deviceInvite) == .forbidden)
+    #expect(try f.write(globex, deviceInvite) == nil)
+    #expect(try f.write(globex, deviceInvite) == .invalidData) // key reuse
+    #expect(f.ledger.state.members[globex.id]?.deviceInvites == [pub(invite)])
+
+    // The second device needs the invite's signature, then writes as Globex.
+    let second = try Actor(f.group, f.secret, id: globex.id)
+    #expect(try claim(second, invite: invite, signedBy: Curve25519.Signing.PrivateKey()) == .badInviteSig)
+    #expect(try claim(second, invite: invite) == nil)
+    #expect(f.ledger.state.members[globex.id]?.keys == [pub(globex.key), pub(second.key)])
+    #expect(f.ledger.state.members[globex.id]?.deviceInvites.isEmpty == true)
+    #expect(try f.write(second, .memberUpdated(.init(id: globex.id, name: "Globex GmbH"))) == nil)
+    let p = f.payment(amount: 1000, track: false, in: [(globex.id, 1000)], out: [(ben.id, 1000)])
+    #expect(try f.write(second, .paymentCreated(p)) == nil)
+    #expect(f.ledger.state.payments[p.id]?.creator == globex.id)
+    #expect(try f.write(globex, .paymentDeleted(.init(id: p.id))) == nil) // the first device edits what the second made
+
+    // An invite is good for one device.
+    let third = try Actor(f.group, f.secret, id: globex.id)
+    #expect(try claim(third, invite: invite) == .badInviteSig)
+
+    // The second device can't speak for Ben.
+    let forger = try EventWriter(groupID: f.group, secret: f.secret, author: ben.id, signer: second.key)
+    f.server.append(try forger.write(.memberUpdated(.init(id: ben.id, name: "x")), seen: f.ledger.state.head))
+    f.ledger.apply(Array(f.server.events.suffix(1)))
+    #expect(f.ledger.state.history.last?.rejection == .badSignature)
+
+    // Revoking a pending device invite: the member or the admin.
+    let spare = Curve25519.Signing.PrivateKey()
+    #expect(try f.write(second, .memberDeviceInvited(.init(id: globex.id, inviteKey: pub(spare).base64URL))) == nil)
+    let revoke = EventData.memberDeviceInviteRevoked(.init(id: globex.id, inviteKey: pub(spare).base64URL))
+    #expect(try f.write(ben, revoke) == .forbidden)
+    #expect(try f.write(f.admin, revoke) == nil)
+    #expect(try f.write(f.admin, revoke) == .unknownTarget)
+    #expect(try claim(third, invite: spare) == .badInviteSig)
+
+    // Replaying from scratch gives the same state.
+    var fresh = try Ledger(groupID: f.group, secret: f.secret)
+    fresh.apply(f.server.events)
+    #expect(fresh.state == f.ledger.state)
+}

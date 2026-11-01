@@ -19,19 +19,21 @@ it into the current state (members, payments, balances, history).
 ```
 group secret S (32 bytes, shared by all members via their invite QR)
   └─ K_enc = HKDF(S)            encrypts every event (ChaCha20-Poly1305)
-member key (Ed25519, one per member per group)
+member key (Ed25519, one per device of a member, per group)
   ├─ signs every event          clients verify: who wrote what
   └─ signs every request        server verifies: who may read/write
-invite key (Ed25519, one-time)  lets a new member register their member key
+invite key (Ed25519, one-time)  lets a new device register its member key
 ```
 
-In short: **one key per group for reading, one key per member for writing.**
+In short: **one key per group for reading, one or more keys per member for
+writing.** A member can be a person or a company whose people share it; every
+device of the member writes as that member.
 
 | Key | Held by | Role |
 |---|---|---|
 | Group secret `S` | every member | read: decrypt the ledger |
-| Member key | one member (all their devices) | write: sign events and server requests; identifies the member |
-| Invite key | one pending member, once | join: swap itself for the member key |
+| Member key | one device of a member (a member may have several) | write: sign events and server requests; identifies the member |
+| Invite key | one pending device, once | join: swap itself for a member key |
 
 `K_enc` is symmetric, so a holder of `S` could also produce ciphertext. That
 grants no write access: the server only accepts appends signed by a
@@ -80,20 +82,25 @@ K_enc = HKDF-SHA256(ikm = S, salt = groupId(16), info = "group-balance/v1/enc", 
 
 ### 3.2 Member keys
 
-Every member who joined has an Ed25519 key pair for this group, generated on
-their device. Clients SHOULD store the private key in a synced, end-to-end
-encrypted store (iOS: iCloud Keychain, synchronizable, accessible after first
-unlock) so all devices of that person act as the same member.
+Every device of a member has an Ed25519 key pair for this group, generated on
+that device. All keys of a member are equal: each writes as the member. Clients
+SHOULD store the private key in a synced, end-to-end encrypted store (iOS:
+iCloud Keychain, synchronizable, accessible after first unlock) so a person's
+own devices share one key; further keys are for devices that can't share it
+(another person of the same member, another platform). A member gets its first
+key by claiming its seat and every further key through a device invite (§7.3).
 
 ### 3.3 Invite keys
 
 An invite key is an Ed25519 key pair derived from a 32-byte random seed `I`
 (the seed is the RFC 8032 private key). The admin creates one per unclaimed
-member; it is valid for exactly one claim.
+member (its first device); a claimed member creates one for each further
+device of its own. Each is valid for exactly one claim.
 
 ## 4. Invite link
 
-The admin shows a member's invite as a QR code of this URL:
+The admin shows a member's invite, and a member's device shows a device
+invite for its own member, as a QR code of the same URL:
 
 ```
 groupbalance://join?v=1&s=<server>&g=<groupId>&m=<memberId>#k=<S>&i=<I>
@@ -104,7 +111,7 @@ groupbalance://join?v=1&s=<server>&g=<groupId>&m=<memberId>#k=<S>&i=<I>
 | `v` | protocol version, `1` |
 | `s` | server base URL, percent-encoded, `https://` (plain `http://` only in debug builds) |
 | `g` | group id |
-| `m` | member id of the seat this invite is for |
+| `m` | member id this invite is for |
 | `k` | base64url group secret `S` |
 | `i` | base64url invite seed `I` |
 
@@ -141,17 +148,25 @@ owner's secret, an environment value). Compared in constant time.
 
 ### 5.2 Key registry (server side)
 
-Per group the server keeps `(publicKey, role, status)`:
+Per group the server keeps `(publicKey, role, status)`, and for invites the
+key that created it and the role it grants:
 
 | role | status | may |
 |---|---|---|
-| `admin` | `active` | everything a member may, plus create/revoke invites |
-| `member` | `active` | read and append events, read stream |
+| `admin` | `active` | everything a member may, plus revoke any invite and create invites that grant `admin` |
+| `member` | `active` | read and append events, read stream, create invites that grant `member`, revoke invites it created |
 | `invite` | `pending` | claim only |
 | `invite` | `claimed`, `revoked` | nothing |
 
-v1 has exactly one admin per group: the creator. Removing members (status
-`removed`) and more admins are on the roadmap.
+The server can't tell members apart (it never sees the ledger), so it lets any
+member create invites; which member an invite belongs to and who may create it
+is decided in the ledger (§7.3). A key registered through an invite the ledger
+doesn't back can read, as anyone holding a QR code could, but its events are
+invalid.
+
+v1 has exactly one admin per group: the creator, on each of its devices.
+Removing members and devices (status `removed`) and more admins are on the
+roadmap.
 
 ### 5.3 Endpoints
 
@@ -161,9 +176,9 @@ v1 has exactly one admin per group: the creator. Removing members (status
 | `POST /v1/groups` | owner | `{groupId, adminKey}` → 201. Registers the group and its admin key. |
 | `GET /v1/admin/groups` | owner | → `{groups: [{groupId, createdAt, lastWriteAt, events, bytes}]}` |
 | `DELETE /v1/admin/groups/{g}` | owner | → 204. Deletes the group and all events. |
-| `POST /v1/groups/{g}/invites` | admin | `{inviteKey}` → 201 |
-| `DELETE /v1/groups/{g}/invites/{inviteKey}` | admin | → 204 (pending → revoked) |
-| `POST /v1/groups/{g}/claim` | invite | `{memberKey, proof}` → 200. Atomically: invite pending → claimed, memberKey registered as `member`/`active`. |
+| `POST /v1/groups/{g}/invites` | member | `{inviteKey, role?}` → 201. `role` is what the claimed key gets: `member` (default) or `admin` (admin callers only, for the admin's own devices). |
+| `DELETE /v1/groups/{g}/invites/{inviteKey}` | member | → 204 (pending → revoked). The admin may revoke any invite, a member only those it created. |
+| `POST /v1/groups/{g}/claim` | invite | `{memberKey, proof}` → 200. Atomically: invite pending → claimed, memberKey registered with the invite's role, `active`. |
 | `POST /v1/groups/{g}/events` | member | `{events: [{id, blob}]}` → `{events: [{id, seq}]}` |
 | `GET /v1/groups/{g}/events?after=<seq>&limit=<n>` | member | → `{events: [{seq, id, blob, authorKey, receivedAt}], head}` |
 | `GET /v1/groups/{g}/stream` | member | Server-sent events, `event: head` / `data: {"seq": n}` on every append and every 30 s |
@@ -194,6 +209,13 @@ v1 has exactly one admin per group: the creator. Removing members (status
    `member.claimed` (§7.3) signed with the new member key.
 4. **Lost QR** (admin): `DELETE …/invites/{old}`, then like step 2 with
    `member.invite_renewed` instead of `member.added`.
+5. **Add a device** (any device of a claimed member, for its own member):
+   generate invite seed `I` → `POST …/invites {inviteKey, role}` (`admin` if
+   the member is the admin) → append `member.device_invited` → show the QR
+   (§4). The new device scans, claims like step 3 and appends
+   `member.device_claimed` instead of `member.claimed`. A pending device
+   invite is withdrawn with `DELETE …/invites/{key}` and
+   `member.device_invite_revoked`.
 
 ## 6. Event envelope
 
@@ -291,6 +313,9 @@ If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 | `member.invite_renewed` | `{ "id", "inviteKey" }` | admin; member must be unclaimed |
 | `member.claimed` | `{ "id", "key", "inviteSig" }` | the member itself, see below |
 | `member.updated` | `{ "id", "name" }` | admin or the member itself |
+| `member.device_invited` | `{ "id", "inviteKey" }` | the member itself |
+| `member.device_claimed` | `{ "id", "key", "inviteKey", "inviteSig" }` | the member itself, see below |
+| `member.device_invite_revoked` | `{ "id", "inviteKey" }` | the member itself or admin |
 
 `member.added`: `id` must be new.
 
@@ -301,8 +326,29 @@ If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 inviteSig = Ed25519(current inviteKey of the member, "group-balance/v1/claim" ‖ groupId(16) ‖ key(32))
 ```
 
-must verify. Keys MUST be unique within a group. After the first valid claim
-the member is **claimed** with that key; later claims are invalid.
+must verify. Keys MUST be unique within a group (member keys, current invite
+keys and pending device invite keys). After the first valid claim the member
+is **claimed** with that key; later `member.claimed` events are invalid
+(`already_claimed`).
+
+`member.device_invited`: `author` MUST equal `id`, so only a claimed member
+invites devices for itself; the admin adds a member's first device through
+`member.added` / `member.invite_renewed` only. `inviteKey` MUST be a new key;
+it becomes one of the member's **pending device invites**.
+
+`member.device_claimed`: the member must exist (`unknown_target`); `author`
+MUST equal `id` (`forbidden`); `key` MUST be a new key (`invalid_data`);
+`inviteKey` MUST be one of the member's pending device invites and
+
+```
+inviteSig = Ed25519(inviteKey, "group-balance/v1/claim" ‖ groupId(16) ‖ key(32))
+```
+
+must verify (`bad_invite_sig` otherwise). The event is signed with `key`.
+Then `key` is one more key of the member and the invite is no longer pending.
+
+`member.device_invite_revoked`: the member must exist and `inviteKey` must be
+one of its pending device invites (`unknown_target`); it is no longer pending.
 
 `member.removed` is reserved for the roadmap.
 
@@ -412,9 +458,10 @@ reason, so everyone sees the same thing and who caused it.
 ### 8.2 Author keys
 
 - `group.created`: `data.admin.key`.
-- `member.claimed`: `data.key` (the member is claiming).
-- every other type: the key of the claimed member `author`. Unclaimed members
-  cannot author events.
+- `member.claimed`, `member.device_claimed`: `data.key` (the device is
+  claiming).
+- every other type: the keys of the claimed member `author`; the signature
+  must verify with one of them. Unclaimed members cannot author events.
 
 ### 8.3 Roles
 
