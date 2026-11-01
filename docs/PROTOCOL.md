@@ -468,6 +468,19 @@ expecting; `pendingHeld` is money still expected to arrive at a member.
 At most n − 1 transfers. Debts are netted through the group: if A owes B and B
 owes C the same amount, the result is A pays C.
 
+### 9.4 Expected
+
+What the balances become once every tracked payment has fully arrived:
+
+```
+expected[m]       = balance[m] + pendingOwned[m] − pendingHeld[m]
+expectedTransfers = transfers(expected)
+```
+
+`expected` sums to zero like `balance`. Clients show it next to the arrived
+numbers so members can see whether money still on its way changes who pays
+whom before they settle. Only `balance` and `transfers` are what is owed now.
+
 ## 10. Versioning
 
 - The blob version byte (`0x01`) changes only with the envelope or crypto.

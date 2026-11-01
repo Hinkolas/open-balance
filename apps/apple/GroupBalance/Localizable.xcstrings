@@ -101,16 +101,6 @@
         }
       }
     },
-    "%@ more once it arrives.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dazu %@, sobald es ankommt."
-          }
-        }
-      }
-    },
     "%@ of %@ arrived": {
       "localizations": {
         "de": {
@@ -121,12 +111,32 @@
         }
       }
     },
+    "%@ once everything arrives": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, wenn alles angekommen ist"
+          }
+        }
+      }
+    },
     "%@ passes on": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ gibt weiter"
+          }
+        }
+      }
+    },
+    "%@ recorded, waiting for confirmation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ eingetragen, wartet auf Bestätigung"
           }
         }
       }
@@ -411,12 +421,32 @@
         }
       }
     },
+    "Between others": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen anderen"
+          }
+        }
+      }
+    },
     "Cancel": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Abbrechen"
+          }
+        }
+      }
+    },
+    "Changes once the %@ still expected has arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ändert sich, sobald die noch erwarteten %@ angekommen sind."
           }
         }
       }
@@ -641,12 +671,42 @@
         }
       }
     },
+    "Everyone will be settled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dann sind alle quitt."
+          }
+        }
+      }
+    },
     "Everything that happens in the group shows up here.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Alles, was in der Gruppe passiert, erscheint hier."
+          }
+        }
+      }
+    },
+    "Expected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwartet"
+          }
+        }
+      }
+    },
+    "Expected %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwartet %@"
           }
         }
       }
@@ -951,6 +1011,16 @@
         }
       }
     },
+    "Money is still on its way": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es ist noch Geld unterwegs"
+          }
+        }
+      }
+    },
     "More": {
       "localizations": {
         "de": {
@@ -1001,6 +1071,16 @@
         }
       }
     },
+    "Not owed yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht fällig"
+          }
+        }
+      }
+    },
     "Not synced yet": {
       "localizations": {
         "de": {
@@ -1017,6 +1097,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Notiz"
+          }
+        }
+      }
+    },
+    "Nothing is on its way, so this is the same as what is owed now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es ist nichts mehr unterwegs, also gilt dasselbe wie jetzt."
           }
         }
       }
@@ -1057,6 +1147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Offline – %lld Änderung(en) warten"
+          }
+        }
+      }
+    },
+    "Once the %@ still expected arrives, who pays whom changes. Check Expected before you settle.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobald die noch erwarteten %@ ankommen, ändert sich, wer wem zahlt. Schau dir „Erwartet“ an, bevor du begleichst."
           }
         }
       }
@@ -1137,6 +1237,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wähl zwei verschiedene Personen."
+          }
+        }
+      }
+    },
+    "Plan": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
           }
         }
       }
@@ -1251,6 +1361,16 @@
         }
       }
     },
+    "Search payments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahlungen suchen"
+          }
+        }
+      }
+    },
     "Server": {
       "localizations": {
         "de": {
@@ -1281,12 +1401,42 @@
         }
       }
     },
+    "Settle up with %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit %@ begleichen"
+          }
+        }
+      }
+    },
+    "Settling records a payment. It counts once the receiver confirms it arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Begleichen trägt eine Zahlung ein. Sie zählt, sobald der Empfänger bestätigt, dass sie angekommen ist."
+          }
+        }
+      }
+    },
     "Share": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Teilen"
+          }
+        }
+      }
+    },
+    "Show all": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle anzeigen"
           }
         }
       }
@@ -1317,6 +1467,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gleichmäßig verteilt."
+          }
+        }
+      }
+    },
+    "Still expected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch erwartet"
           }
         }
       }
@@ -1377,6 +1537,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Admin-Token ist das ADMIN_TOKEN des Servers. Damit kann dieses Gerät dort Gruppen erstellen; Zugriff auf Inhalte einer Gruppe gibt es nie."
+          }
+        }
+      }
+    },
+    "The faint bar shows where each balance lands once expected money arrives.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der blasse Balken zeigt, wo jeder Saldo landet, sobald das erwartete Geld angekommen ist."
           }
         }
       }
@@ -1447,6 +1617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Link ist keine gültige Group-Balance-Einladung."
+          }
+        }
+      }
+    },
+    "This plan assumes the %@ still expected arrives. Settle once it has.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Plan geht davon aus, dass die noch erwarteten %@ ankommen. Begleiche erst, wenn das Geld da ist."
           }
         }
       }
@@ -1601,6 +1781,16 @@
         }
       }
     },
+    "When the money is in your account, confirm it under Waiting for arrival.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn das Geld auf deinem Konto ist, bestätige es unter „Wartet auf Eingang“."
+          }
+        }
+      }
+    },
     "Who gets the money?": {
       "localizations": {
         "de": {
@@ -1627,6 +1817,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wer zahlt wem"
+          }
+        }
+      }
+    },
+    "Who pays whom changes as this money arrives.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer wem zahlt, ändert sich, sobald dieses Geld ankommt."
           }
         }
       }
@@ -1717,6 +1917,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du gibst weiter"
+          }
+        }
+      }
+    },
+    "You pay": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du zahlst"
+          }
+        }
+      }
+    },
+    "You receive": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bekommst"
           }
         }
       }
@@ -1907,6 +2127,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "an falscher Stelle"
+          }
+        }
+      }
+    },
+    "pays": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zahlt an"
           }
         }
       }

@@ -1,5 +1,5 @@
 {
-  "description": "PROTOCOL.md §9.2 + §9.3: payments (already validated) to balances, pending amounts and transfers. Member ids are opaque strings compared by bytes.",
+  "description": "PROTOCOL.md §9.2–9.4: payments (already validated) to balances, pending amounts, transfers, expected balances and expected transfers. Member ids are opaque strings compared by bytes.",
   "cases": [
     {
       "name": "expense: a paid 90.00 for a, b, c",
@@ -52,6 +52,23 @@
           "c": 0
         },
         "transfers": [
+          {
+            "from": "b",
+            "to": "a",
+            "amount": 3000
+          },
+          {
+            "from": "c",
+            "to": "a",
+            "amount": 3000
+          }
+        ],
+        "expected": {
+          "a": 6000,
+          "b": -3000,
+          "c": -3000
+        },
+        "expectedTransfers": [
           {
             "from": "b",
             "to": "a",
@@ -119,6 +136,17 @@
             "to": "b",
             "amount": 40000
           }
+        ],
+        "expected": {
+          "a": -40000,
+          "b": 40000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
         ]
       }
     },
@@ -180,6 +208,17 @@
             "to": "b",
             "amount": 20000
           }
+        ],
+        "expected": {
+          "a": -40000,
+          "b": 40000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
         ]
       }
     },
@@ -225,7 +264,18 @@
           "a": 100000,
           "b": 0
         },
-        "transfers": []
+        "transfers": [],
+        "expected": {
+          "a": -40000,
+          "b": 40000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
+        ]
       }
     },
     {
@@ -277,6 +327,17 @@
           "b": 0
         },
         "transfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
+        ],
+        "expected": {
+          "a": -40000,
+          "b": 40000
+        },
+        "expectedTransfers": [
           {
             "from": "a",
             "to": "b",
@@ -352,6 +413,23 @@
             "to": "c",
             "amount": 16
           }
+        ],
+        "expected": {
+          "a": -66,
+          "b": 33,
+          "c": 33
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 33
+          },
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 33
+          }
         ]
       }
     },
@@ -412,6 +490,23 @@
             "from": "a",
             "to": "c",
             "amount": 600
+          }
+        ],
+        "expected": {
+          "a": -600,
+          "b": -400,
+          "c": 1000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 600
+          },
+          {
+            "from": "b",
+            "to": "c",
+            "amount": 400
           }
         ]
       }
@@ -479,7 +574,12 @@
             "to": "a",
             "amount": 3000
           }
-        ]
+        ],
+        "expected": {
+          "a": 0,
+          "b": 0
+        },
+        "expectedTransfers": []
       }
     },
     {
@@ -545,7 +645,12 @@
           "a": 0,
           "b": 0
         },
-        "transfers": []
+        "transfers": [],
+        "expected": {
+          "a": 0,
+          "b": 0
+        },
+        "expectedTransfers": []
       }
     },
     {
@@ -613,6 +718,18 @@
             "to": "c",
             "amount": 1000
           }
+        ],
+        "expected": {
+          "a": -1000,
+          "b": 0,
+          "c": 1000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 1000
+          }
         ]
       }
     },
@@ -655,7 +772,12 @@
           "a": 0,
           "b": 0
         },
-        "transfers": []
+        "transfers": [],
+        "expected": {
+          "a": 0,
+          "b": 0
+        },
+        "expectedTransfers": []
       }
     },
     {
@@ -714,7 +836,12 @@
           "a": 0,
           "b": 0
         },
-        "transfers": []
+        "transfers": [],
+        "expected": {
+          "a": 0,
+          "b": 0
+        },
+        "expectedTransfers": []
       }
     },
     {
@@ -761,7 +888,18 @@
           "a": 1000,
           "b": 0
         },
-        "transfers": []
+        "transfers": [],
+        "expected": {
+          "a": -1000,
+          "b": 1000
+        },
+        "expectedTransfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 1000
+          }
+        ]
       }
     },
     {
@@ -819,6 +957,23 @@
           "c": 0
         },
         "transfers": [
+          {
+            "from": "b",
+            "to": "a",
+            "amount": 450
+          },
+          {
+            "from": "c",
+            "to": "a",
+            "amount": 450
+          }
+        ],
+        "expected": {
+          "a": 900,
+          "b": -450,
+          "c": -450
+        },
+        "expectedTransfers": [
           {
             "from": "b",
             "to": "a",

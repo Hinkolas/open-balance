@@ -23,6 +23,17 @@ both first-class and follow the system.
   headers and footers instead of custom labels, cards or hairlines.
 - **Sheets** for self-contained tasks (new payment, record arrival, invite,
   join, create group). Cancel leading, the action trailing.
+- **Overview** shows your balance (with the expected balance once pending
+  money arrives), a read-only Who pays whom that ends in a `Settle up` row,
+  money waiting for arrival, balances, and the 5 latest payments with a
+  `Show all` row (badge = count) that pushes the full, searchable list.
+- **Settle up** is a pushed screen, not inline buttons. A segmented
+  `Arrived | Expected` picker in the navigation bar switches between what is
+  owed now and the plan once everything arrives (PROTOCOL.md §9.4). Arrived
+  warns when pending money would change the plan; Expected is marked "not
+  owed yet". Your payments carry a trailing capsule `Settle up` button
+  (`.bordered`, `.capsule`), App Store style; a recorded but unconfirmed
+  settlement replaces the button with "recorded, waiting for confirmation".
 - **Multi-step tasks** push steps in the sheet's `NavigationStack`: the back
   button and swipe-back work, the trailing button says `Next` until the last
   step, which says `Save`.
@@ -56,8 +67,11 @@ System text styles only (Dynamic Type). Money is the one branded voice:
 
 Each member's balance is drawn as a bar diverging from a shared center axis:
 owed-to to the right in green, owing to the left in red, scaled to the
-largest absolute balance in the group. It appears in Overview's Balances
-section and nowhere else, so "who is where" reads at a glance.
+largest absolute balance or expected balance in the group. When money is
+still on its way, a faint bar (same color, 30 % opacity) behind it marks the
+expected balance, with an "Expected ±x" caption so the change never relies on
+the bar alone. It appears in Overview's Balances section and nowhere else, so
+"who is where, and where they are heading" reads at a glance.
 
 ## Components (`Design` package)
 

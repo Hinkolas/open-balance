@@ -68,34 +68,46 @@ public struct MemberAvatar: View {
 }
 
 /// The balance line: a bar diverging from a center axis, right and green for
-/// money the group owes this member, left and red for money they owe.
+/// money the group owes this member, left and red for money they owe. An
+/// optional faint bar behind it marks where the member lands once expected
+/// money has arrived.
 public struct BalanceBar: View {
     let value: Int
+    let expected: Int?
     let scale: Int
 
-    public init(value: Int, scale: Int) {
+    public init(value: Int, expected: Int? = nil, scale: Int) {
         self.value = value
+        self.expected = expected == value ? nil : expected
         self.scale = max(scale, 1)
     }
 
     public var body: some View {
         GeometryReader { geo in
             let half = geo.size.width / 2
-            let length = max(3, half * min(1, CGFloat(abs(value)) / CGFloat(scale)))
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary).frame(height: 4)
+                if let expected, expected != 0 {
+                    bar(expected, half: half)
+                        .opacity(0.3)
+                }
                 Rectangle().fill(.tertiary).frame(width: 1.5, height: 14).offset(x: half - 0.75)
                 if value != 0 {
-                    Capsule()
-                        .fill(value > 0 ? Theme.positive : Theme.negative)
-                        .frame(width: length, height: 6)
-                        .offset(x: value > 0 ? half : half - length)
+                    bar(value, half: half)
                 }
             }
             .frame(maxHeight: .infinity)
         }
         .frame(height: 14)
         .accessibilityHidden(true)
+    }
+
+    private func bar(_ v: Int, half: CGFloat) -> some View {
+        let length = max(3, half * min(1, CGFloat(abs(v)) / CGFloat(scale)))
+        return Capsule()
+            .fill(v > 0 ? Theme.positive : Theme.negative)
+            .frame(width: length, height: 6)
+            .offset(x: v > 0 ? half : half - length)
     }
 }
 

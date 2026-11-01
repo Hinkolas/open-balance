@@ -4,11 +4,15 @@ import LedgerSync
 import SwiftUI
 
 /// The active group at a glance: your balance, who pays whom, money waiting
-/// to be confirmed, everyone's balance line, latest payments.
+/// to be confirmed, everyone's balance line, latest payments. Settling has
+/// its own screen, where arrived and expected plans can be compared.
 struct OverviewView: View {
     let session: GroupSession
     @State private var draft: PaymentDraft?
     @State private var arrivalFor: ArrivalTarget?
+
+    /// How many payments the overview lists before "Show all".
+    private let recentLimit = 5
 
     var body: some View {
         let state = session.state
@@ -38,13 +42,19 @@ struct OverviewView: View {
         .toolbar { AddPaymentMenu(session: session, draft: $draft) }
         .refreshable { try? await session.syncNow() }
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
+        .navigationDestination(for: OverviewRoute.self) { route in
+            switch route {
+            case .settle: SettleView(session: session)
+            case .allPayments: AllPaymentsView(session: session)
+            }
+        }
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
         .sheet(item: $arrivalFor) { ArrivalSheet(session: session, target: $0) }
     }
 
     private func hero(_ summary: Balances.Summary) -> some View {
         let mine = summary.balances[session.me] ?? 0
-        let expected = summary.pendingOwned[session.me] ?? 0
+        let expected = summary.expected[session.me] ?? mine
         return Section {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your balance").font(.subheadline).foregroundStyle(.secondary)
@@ -52,71 +62,57 @@ struct OverviewView: View {
                        font: .amount(.largeTitle, weight: .bold))
                 Text(mine > 0 ? String(localized: "The group owes you money.") : mine < 0 ? String(localized: "You owe the group money.") : String(localized: "You're settled."))
                     .font(.subheadline)
-                if expected > 0 {
-                    Text("\(session.money(expected)) more once it arrives.").font(.subheadline).foregroundStyle(.secondary)
+                if expected != mine {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "clock")
+                            .accessibilityHidden(true)
+                        Text("\(session.money(expected, signed: true)) once everything arrives")
+                            .monospacedDigit()
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
                 SyncStatus(session: session).padding(.top, 4)
             }
-            .padding(.vertical, 4)
         }
         .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+        // Default leading inset keeps the text clear of the section's corner radius.
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 
-    private func transfers(_ summary: Balances.Summary) -> some View {
+    @ViewBuilder private func transfers(_ summary: Balances.Summary) -> some View {
+        let stillExpected = summary.pendingHeld.values.reduce(0, +)
         Section {
             if summary.transfers.isEmpty {
                 Label("Everyone is settled.", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(Theme.positive)
             }
             ForEach(summary.transfers, id: \.self) { t in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Text(session.name(t.from)).fontWeight(t.from == session.me ? .semibold : .regular)
-                            Image(systemName: "arrow.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                            Text(session.name(t.to)).fontWeight(t.to == session.me ? .semibold : .regular)
-                        }
-                        .lineLimit(1)
-                        if t.from == session.me {
-                            Button("Settle up", systemImage: "arrow.left.arrow.right") { draft = .settle(t, session: session) }
-                                .buttonStyle(.borderless)
-                                .font(.subheadline)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Amount(session.money(t.amount), tone: t.from == session.me ? .negative : t.to == session.me ? .positive : .neutral)
+                TransferRow(session: session, transfer: t)
+            }
+            if !summary.transfers.isEmpty || summary.expectedDiffers {
+                NavigationLink(value: OverviewRoute.settle) {
+                    Label("Settle up", systemImage: "arrow.left.arrow.right")
                 }
             }
         } header: {
             Text("Who pays whom")
         } footer: {
-            Text("The fewest transfers that settle everyone, netted through the group.")
+            if summary.expectedDiffers {
+                Text("Changes once the \(session.money(stillExpected)) still expected has arrived.")
+            } else if !summary.transfers.isEmpty {
+                Text("The fewest transfers that settle everyone, netted through the group.")
+            }
         }
     }
 
     @ViewBuilder private func waiting(_ state: LedgerState) -> some View {
-        let items: [Waiting] = state.livePayments.filter(\.payment.track).flatMap { r in
-            let effect = Balances.effect(of: r.payment, arrivals: state.arrivals(of: r.id))
-            return r.payment.in.lines.compactMap { line -> Waiting? in
-                let open = line.amount - (effect.held[line.member] ?? 0)
-                guard open > 0, line.member == session.me || state.members[line.member]?.isClaimed == false else { return nil }
-                return Waiting(record: r, line: line, open: open)
-            }
-        }
+        let items = Waiting.items(in: state) { $0 == session.me || state.members[$0]?.isClaimed == false }
         if !items.isEmpty {
             Section {
                 ForEach(items) { item in
                     NavigationLink(value: PaymentRoute(id: item.record.id)) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.record.payment.title)
-                                Text(item.line.member == session.me ? String(localized: "to you") : String(localized: "to \(session.name(item.line.member))"))
-                                    .font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Amount(session.money(item.open), tone: .pending)
-                        }
+                        WaitingRow(session: session, item: item)
                     }
                     .swipeActions(edge: .leading) {
                         Button("Arrived", systemImage: "checkmark") {
@@ -139,36 +135,56 @@ struct OverviewView: View {
     }
 
     private func balances(_ state: LedgerState, _ summary: Balances.Summary) -> some View {
-        let scale = summary.balances.values.map(abs).max() ?? 0
-        return Section("Balances") {
+        let scale = (summary.balances.values.map(abs) + summary.expected.values.map(abs)).max() ?? 0
+        return Section {
             ForEach(state.orderedMembers) { m in
                 let b = summary.balances[m.id] ?? 0
+                let e = summary.expected[m.id] ?? b
                 HStack(spacing: 12) {
                     MemberAvatar(m.initial, isMe: m.id == session.me)
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(alignment: .firstTextBaseline) {
                             Text(session.name(m.id))
                             if !m.isClaimed { StatusBadge(String(localized: "Invited")) }
                             Spacer()
                             Amount(session.money(b, signed: true), tone: b > 0 ? .positive : b < 0 ? .negative : .pending)
                         }
-                        BalanceBar(value: b, scale: scale)
+                        BalanceBar(value: b, expected: e, scale: scale)
+                        if e != b {
+                            Text("Expected \(session.money(e, signed: true))")
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
             }
+        } header: {
+            Text("Balances")
+        } footer: {
+            if summary.expected != summary.balances {
+                Text("The faint bar shows where each balance lands once expected money arrives.")
+            }
         }
     }
 
     @ViewBuilder private func recent(_ state: LedgerState) -> some View {
-        let payments = state.livePayments.sorted { ($0.payment.date, $0.createdAt) > ($1.payment.date, $1.createdAt) }
+        let payments = state.livePayments.newestFirst
         Section("Payments") {
             if payments.isEmpty {
                 Text("Nothing yet. Tap + to add the first payment.").foregroundStyle(.secondary)
             }
-            ForEach(payments.prefix(10)) { r in
+            ForEach(payments.prefix(recentLimit)) { r in
                 NavigationLink(value: PaymentRoute(id: r.id)) { PaymentRow(session: session, record: r) }
+            }
+            if payments.count > recentLimit {
+                NavigationLink(value: OverviewRoute.allPayments) {
+                    Text("Show all")
+                }
+                .badge(payments.count)
             }
         }
     }
@@ -176,11 +192,75 @@ struct OverviewView: View {
 
 struct PaymentRoute: Hashable { let id: PaymentID }
 
-private struct Waiting: Identifiable {
+enum OverviewRoute: Hashable { case settle, allPayments }
+
+extension [PaymentRecord] {
+    /// By payment date, then by when they were added; newest first.
+    var newestFirst: [PaymentRecord] {
+        sorted { ($0.payment.date, $0.createdAt) > ($1.payment.date, $1.createdAt) }
+    }
+}
+
+/// "You → Acme   1.234,56 €". Red when you pay, green when you receive.
+struct TransferRow: View {
+    let session: GroupSession
+    let transfer: Balances.Transfer
+    var tone: AmountTone?
+
+    var body: some View {
+        let t = transfer
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(session.name(t.from)).fontWeight(t.from == session.me ? .semibold : .regular)
+                Image(systemName: "arrow.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel(Text("pays"))
+                Text(session.name(t.to)).fontWeight(t.to == session.me ? .semibold : .regular)
+            }
+            .lineLimit(1)
+            Spacer(minLength: 8)
+            Amount(session.money(t.amount), tone: tone ?? (t.from == session.me ? .negative : t.to == session.me ? .positive : .neutral))
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Money still expected to arrive at one receiver for one payment.
+struct Waiting: Identifiable {
     let record: PaymentRecord
     let line: Payment.Line
     let open: Int
     var id: String { record.id + line.member }
+
+    static func items(in state: LedgerState, for include: (MemberID) -> Bool = { _ in true }) -> [Waiting] {
+        state.livePayments.filter(\.payment.track).flatMap { r in
+            let effect = Balances.effect(of: r.payment, arrivals: state.arrivals(of: r.id))
+            return r.payment.in.lines.compactMap { line -> Waiting? in
+                let open = line.amount - (effect.held[line.member] ?? 0)
+                guard open > 0, include(line.member) else { return nil }
+                return Waiting(record: r, line: line, open: open)
+            }
+        }
+    }
+}
+
+struct WaitingRow: View {
+    let session: GroupSession
+    let item: Waiting
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.record.payment.title)
+                Text(item.line.member == session.me ? String(localized: "to you") : String(localized: "to \(session.name(item.line.member))"))
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Amount(session.money(item.open), tone: .pending)
+        }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// "Syncing…" / "Offline" under the balance, only when it matters.

@@ -53,6 +53,12 @@ public enum Balances {
         /// Money still expected to arrive at a member.
         public var pendingHeld: [MemberID: Int] = [:]
         public var transfers: [Transfer] = []
+        /// §9.4: the balance once every tracked payment has fully arrived.
+        public var expected: [MemberID: Int] = [:]
+        /// §9.4: who pays whom once everything has arrived.
+        public var expectedTransfers: [Transfer] = []
+        /// Whether money still on its way changes who pays whom.
+        public var expectedDiffers: Bool { expectedTransfers != transfers }
     }
 
     public struct Transfer: Sendable, Equatable, Hashable {
@@ -88,6 +94,10 @@ public enum Balances {
             }
         }
         s.transfers = transfers(s.balances)
+        for (m, b) in s.balances {
+            s.expected[m] = b + (s.pendingOwned[m] ?? 0) - (s.pendingHeld[m] ?? 0)
+        }
+        s.expectedTransfers = transfers(s.expected)
         return s
     }
 
