@@ -25,6 +25,19 @@ member key (Ed25519, one per member per group)
 invite key (Ed25519, one-time)  lets a new member register their member key
 ```
 
+In short: **one key per group for reading, one key per member for writing.**
+
+| Key | Held by | Role |
+|---|---|---|
+| Group secret `S` | every member | read: decrypt the ledger |
+| Member key | one member (all their devices) | write: sign events and server requests; identifies the member |
+| Invite key | one pending member, once | join: swap itself for the member key |
+
+`K_enc` is symmetric, so a holder of `S` could also produce ciphertext. That
+grants no write access: the server only accepts appends signed by a
+registered member key, and clients only apply events whose inner signature
+matches the author's member key.
+
 What the server learns: group ids, the member public keys of a group and their
 role, which key wrote which event and when, blob sizes (padded), IP addresses.
 What it cannot do: read events, write valid events (it has no `K_enc`),
