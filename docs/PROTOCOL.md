@@ -334,10 +334,10 @@ A payment has two sides over the same `amount`:
 | `date` | ISO 8601 calendar date the payment happened, as the user entered it |
 | `track` | `true`: only money recorded as arrived counts (§7.5). `false`: counts in full immediately |
 | `in`, `out` | split sides |
-| `mode` | `equal`, `shares`, `exact`, `percent`. Editing hint for forms |
+| `mode` | editing hint for forms: `mixed` (per line an amount, a percentage or the rest), `equal`, `shares`, `exact`, `percent`. Unknown modes reopen as exact amounts |
 | `lines[].amount` | **authoritative** resolved amount, ≥ 0 |
-| `lines[].value` | editing hint: weight for `shares`, basis points for `percent` |
-| `lines[].rest` | editing hint: the `percent` line that absorbs the remainder |
+| `lines[].value` | editing hint: basis points for `percent`/`mixed` lines entered as a percentage, weight for `shares` |
+| `lines[].rest` | editing hint: the line that took whatever was left |
 
 Validation: every side has ≥ 1 line, each member at most once per side, every
 member exists, line amounts sum to `amount` on each side. The same member may

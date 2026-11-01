@@ -56,6 +56,13 @@ public enum Money {
         return r + frac
     }
 
+    /// "130.000,00" in the user's locale, without the currency symbol.
+    public static func bare(_ minor: Int, currency: String, locale: Locale = .current) -> String {
+        let exp = Currency.exponent(currency)
+        let value = Decimal(minor) / pow(Decimal(10), exp)
+        return value.formatted(.number.precision(.fractionLength(exp)).locale(locale))
+    }
+
     /// Minor units back to an input string ("12,40" in the user's locale).
     public static func inputString(_ minor: Int, currency: String, locale: Locale = .current) -> String {
         let exp = Currency.exponent(currency)

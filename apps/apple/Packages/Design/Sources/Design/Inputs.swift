@@ -7,7 +7,7 @@ public struct GBTextField: View {
     let keyboard: GBKeyboard
     let mono: Bool
 
-    public enum GBKeyboard { case `default`, decimalPad, email, name }
+    public enum GBKeyboard { case `default`, decimalPad, email, name, numbers }
 
     public init(_ placeholder: String, text: Binding<String>, keyboard: GBKeyboard = .default, mono: Bool = false) {
         self.placeholder = placeholder
@@ -37,6 +37,7 @@ public struct GBTextField: View {
         case .default, .name: .default
         case .decimalPad: .decimalPad
         case .email: .emailAddress
+        case .numbers: .numbersAndPunctuation
         }
     }
     #endif

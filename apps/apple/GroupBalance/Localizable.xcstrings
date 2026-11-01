@@ -81,6 +81,16 @@
         }
       }
     },
+    "%@ left to distribute": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "noch %@ zu verteilen"
+          }
+        }
+      }
+    },
     "%@ removed a confirmed arrival": {
       "localizations": {
         "de": {
@@ -117,6 +127,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ hat die Einladung von %2$@ erneuert"
+          }
+        }
+      }
+    },
+    "%@ too much": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ zu viel"
           }
         }
       }
@@ -177,6 +197,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld Mitglieder · %2$@"
+          }
+        }
+      }
+    },
+    "= %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "= %@"
           }
         }
       }
@@ -321,16 +351,6 @@
         }
       }
     },
-    "Balance": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Balance"
-          }
-        }
-      }
-    },
     "Balances": {
       "localizations": {
         "de": {
@@ -371,6 +391,16 @@
         }
       }
     },
+    "Check the value for %@. Use an amount or a percentage like 15%%.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüf den Wert bei %@. Erlaubt sind Beträge oder Prozente wie 15%%."
+          }
+        }
+      }
+    },
     "Checking…": {
       "localizations": {
         "de": {
@@ -407,6 +437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Link kopieren"
+          }
+        }
+      }
+    },
+    "Counts as the money arrives.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zählt, sobald das Geld ankommt."
           }
         }
       }
@@ -531,6 +571,16 @@
         }
       }
     },
+    "Empty means: split equally between everyone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer heißt: gleichmäßig auf alle verteilt."
+          }
+        }
+      }
+    },
     "End-to-end encrypted": {
       "localizations": {
         "de": {
@@ -597,6 +647,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Für"
+          }
+        }
+      }
+    },
+    "For whom?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für wen?"
           }
         }
       }
@@ -901,6 +961,16 @@
         }
       }
     },
+    "Note, e.g. invoice 2026-031": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notiz, z. B. Rechnung 2026-031"
+          }
+        }
+      }
+    },
     "Nothing has happened yet.": {
       "localizations": {
         "de": {
@@ -1131,6 +1201,16 @@
         }
       }
     },
+    "Rest to …": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rest an …"
+          }
+        }
+      }
+    },
     "Save": {
       "localizations": {
         "de": {
@@ -1257,6 +1337,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beide Seiten frei aufteilen"
+          }
+        }
+      }
+    },
+    "Split the amount over the people it arrives at. It only counts once they confirm it arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verteile den Betrag auf die Personen, bei denen er ankommt. Er zählt erst, wenn sie den Eingang bestätigen."
+          }
+        }
+      }
+    },
+    "Split the amount over whom it belongs to. Empty means: same as above. Whoever gets more than they own passes the difference on.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verteile den Betrag darauf, wem er gehört. Leer heißt: so wie oben. Wer mehr bekommt, als ihm gehört, gibt den Unterschied weiter."
           }
         }
       }
@@ -1431,6 +1531,16 @@
         }
       }
     },
+    "To whom?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An wen?"
+          }
+        }
+      }
+    },
     "Track money in a group: who received what, whom it belongs to, what has arrived, and who pays whom in the end. Only members can read it, not even the server.": {
       "localizations": {
         "de": {
@@ -1511,12 +1621,52 @@
         }
       }
     },
+    "What for? e.g. Dinner": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wofür? z. B. Abendessen"
+          }
+        }
+      }
+    },
+    "What for? e.g. Project Nordlicht": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wofür? z. B. Projekt Nordlicht"
+          }
+        }
+      }
+    },
     "What the group owes you (+) or what you owe the group (−), counting only money that has arrived.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Was die Gruppe dir schuldet (+) oder du der Gruppe (−). Es zählt nur Geld, das angekommen ist."
+          }
+        }
+      }
+    },
+    "Who gets the money?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer bekommt das Geld?"
+          }
+        }
+      }
+    },
+    "Who paid?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer hat bezahlt?"
           }
         }
       }
@@ -1531,12 +1681,32 @@
         }
       }
     },
+    "Who pays?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer zahlt?"
+          }
+        }
+      }
+    },
     "Who receives the money. Only what they confirm as arrived counts.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Wer das Geld erhält. Es zählt nur, was als angekommen bestätigt ist."
+          }
+        }
+      }
+    },
+    "Whom does it belong to?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wem gehört es?"
           }
         }
       }
@@ -1561,6 +1731,16 @@
         }
       }
     },
+    "You get": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekommst du"
+          }
+        }
+      }
+    },
     "You get money back.": {
       "localizations": {
         "de": {
@@ -1577,6 +1757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du trittst als das Mitglied bei, das der Admin für dich angelegt hat. Dein Schlüssel bleibt auf deinen Geräten und in deinem iCloud-Schlüsselbund."
+          }
+        }
+      }
+    },
+    "You owe": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du schuldest"
           }
         }
       }
@@ -1641,12 +1831,52 @@
         }
       }
     },
+    "Yours": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dir gehört"
+          }
+        }
+      }
+    },
     "a payment": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "eine Zahlung"
+          }
+        }
+      }
+    },
+    "adds up": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "passt"
+          }
+        }
+      }
+    },
+    "all by you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alles von dir"
+          }
+        }
+      }
+    },
+    "all to you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alles an dich"
           }
         }
       }
@@ -1821,6 +2051,16 @@
         }
       }
     },
+    "same as above": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wie oben"
+          }
+        }
+      }
+    },
     "settled": {
       "localizations": {
         "de": {
@@ -1837,6 +2077,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Signatur passt nicht zum Autor"
+          }
+        }
+      }
+    },
+    "split equally": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gleichmäßig verteilt"
           }
         }
       }
