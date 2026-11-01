@@ -1,0 +1,836 @@
+{
+  "description": "PROTOCOL.md §9.2 + §9.3: payments (already validated) to balances, pending amounts and transfers. Member ids are opaque strings compared by bytes.",
+  "cases": [
+    {
+      "name": "expense: a paid 90.00 for a, b, c",
+      "members": [
+        "a",
+        "b",
+        "c"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 9000,
+          "track": false,
+          "in": [
+            {
+              "member": "a",
+              "amount": 3000
+            },
+            {
+              "member": "b",
+              "amount": 3000
+            },
+            {
+              "member": "c",
+              "amount": 3000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 9000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 6000,
+          "b": -3000,
+          "c": -3000
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "transfers": [
+          {
+            "from": "b",
+            "to": "a",
+            "amount": 3000
+          },
+          {
+            "from": "c",
+            "to": "a",
+            "amount": 3000
+          }
+        ]
+      }
+    },
+    {
+      "name": "income fully arrived at a, belongs 60/40 to a and b",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 100000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 100000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 60000
+            },
+            {
+              "member": "b",
+              "amount": 40000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 100000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -40000,
+          "b": 40000
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
+        ]
+      }
+    },
+    {
+      "name": "income partially arrived in two instalments",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 100000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 100000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 60000
+            },
+            {
+              "member": "b",
+              "amount": 40000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 20000
+            },
+            {
+              "member": "a",
+              "amount": 30000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -20000,
+          "b": 20000
+        },
+        "pendingOwned": {
+          "a": 30000,
+          "b": 20000
+        },
+        "pendingHeld": {
+          "a": 50000,
+          "b": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 20000
+          }
+        ]
+      }
+    },
+    {
+      "name": "income nothing arrived yet",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 100000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 100000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 60000
+            },
+            {
+              "member": "b",
+              "amount": 40000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingOwned": {
+          "a": 60000,
+          "b": 40000
+        },
+        "pendingHeld": {
+          "a": 100000,
+          "b": 0
+        },
+        "transfers": []
+      }
+    },
+    {
+      "name": "arrivals above the expected amount are capped",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 100000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 100000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 60000
+            },
+            {
+              "member": "b",
+              "amount": 40000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 150000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -40000,
+          "b": 40000
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 40000
+          }
+        ]
+      }
+    },
+    {
+      "name": "largest remainder, tie goes to the smaller member id",
+      "members": [
+        "a",
+        "b",
+        "c"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 100,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 100
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 34
+            },
+            {
+              "member": "b",
+              "amount": 33
+            },
+            {
+              "member": "c",
+              "amount": 33
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 50
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -33,
+          "b": 17,
+          "c": 16
+        },
+        "pendingOwned": {
+          "a": 17,
+          "b": 16,
+          "c": 17
+        },
+        "pendingHeld": {
+          "a": 50,
+          "b": 0,
+          "c": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "b",
+            "amount": 17
+          },
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 16
+          }
+        ]
+      }
+    },
+    {
+      "name": "two receivers, only one arrived",
+      "members": [
+        "a",
+        "b",
+        "c"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 1000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 600
+            },
+            {
+              "member": "b",
+              "amount": 400
+            }
+          ],
+          "out": [
+            {
+              "member": "c",
+              "amount": 1000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 600
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -600,
+          "b": 0,
+          "c": 600
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0,
+          "c": 400
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 400,
+          "c": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 600
+          }
+        ]
+      }
+    },
+    {
+      "name": "settle up not confirmed yet",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 3000,
+          "track": false,
+          "kind": "expense",
+          "in": [
+            {
+              "member": "b",
+              "amount": 3000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 3000
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "amount": 3000,
+          "track": true,
+          "kind": "settlement",
+          "in": [
+            {
+              "member": "a",
+              "amount": 3000
+            }
+          ],
+          "out": [
+            {
+              "member": "b",
+              "amount": 3000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 3000,
+          "b": -3000
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 3000
+        },
+        "pendingHeld": {
+          "a": 3000,
+          "b": 0
+        },
+        "transfers": [
+          {
+            "from": "b",
+            "to": "a",
+            "amount": 3000
+          }
+        ]
+      }
+    },
+    {
+      "name": "settle up confirmed by the receiver",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 3000,
+          "track": false,
+          "kind": "expense",
+          "in": [
+            {
+              "member": "b",
+              "amount": 3000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 3000
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "amount": 3000,
+          "track": true,
+          "kind": "settlement",
+          "in": [
+            {
+              "member": "a",
+              "amount": 3000
+            }
+          ],
+          "out": [
+            {
+              "member": "b",
+              "amount": 3000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 3000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0
+        },
+        "transfers": []
+      }
+    },
+    {
+      "name": "a owes b and b owes c: a pays c",
+      "members": [
+        "a",
+        "b",
+        "c"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 1000,
+          "track": false,
+          "in": [
+            {
+              "member": "a",
+              "amount": 1000
+            }
+          ],
+          "out": [
+            {
+              "member": "b",
+              "amount": 1000
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "amount": 1000,
+          "track": false,
+          "in": [
+            {
+              "member": "b",
+              "amount": 1000
+            }
+          ],
+          "out": [
+            {
+              "member": "c",
+              "amount": 1000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": -1000,
+          "b": 0,
+          "c": 1000
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "transfers": [
+          {
+            "from": "a",
+            "to": "c",
+            "amount": 1000
+          }
+        ]
+      }
+    },
+    {
+      "name": "deleted payment does not count",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 5000,
+          "track": false,
+          "deleted": true,
+          "in": [
+            {
+              "member": "b",
+              "amount": 5000
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 5000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0
+        },
+        "transfers": []
+      }
+    },
+    {
+      "name": "same members on both sides cancel out",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 1000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 500
+            },
+            {
+              "member": "b",
+              "amount": 500
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 500
+            },
+            {
+              "member": "b",
+              "amount": 500
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "a",
+              "amount": 500
+            },
+            {
+              "member": "b",
+              "amount": 500
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0
+        },
+        "transfers": []
+      }
+    },
+    {
+      "name": "arrival of a member not on the in side counts nothing",
+      "members": [
+        "a",
+        "b"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 1000,
+          "track": true,
+          "in": [
+            {
+              "member": "a",
+              "amount": 1000
+            }
+          ],
+          "out": [
+            {
+              "member": "b",
+              "amount": 1000
+            }
+          ],
+          "arrivals": [
+            {
+              "member": "b",
+              "amount": 1000
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 1000
+        },
+        "pendingHeld": {
+          "a": 1000,
+          "b": 0
+        },
+        "transfers": []
+      }
+    },
+    {
+      "name": "zero line amounts are allowed",
+      "members": [
+        "a",
+        "b",
+        "c"
+      ],
+      "payments": [
+        {
+          "id": "p1",
+          "amount": 900,
+          "track": false,
+          "in": [
+            {
+              "member": "a",
+              "amount": 0
+            },
+            {
+              "member": "b",
+              "amount": 450
+            },
+            {
+              "member": "c",
+              "amount": 450
+            }
+          ],
+          "out": [
+            {
+              "member": "a",
+              "amount": 900
+            },
+            {
+              "member": "c",
+              "amount": 0
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "balances": {
+          "a": 900,
+          "b": -450,
+          "c": -450
+        },
+        "pendingOwned": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "pendingHeld": {
+          "a": 0,
+          "b": 0,
+          "c": 0
+        },
+        "transfers": [
+          {
+            "from": "b",
+            "to": "a",
+            "amount": 450
+          },
+          {
+            "from": "c",
+            "to": "a",
+            "amount": 450
+          }
+        ]
+      }
+    }
+  ]
+}
