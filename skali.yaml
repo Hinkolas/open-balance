@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Hinkolas/skali/main/schemas/skali.schema.json
 #
 # One headless Go service plus Postgres. The server stores encrypted blobs
-# only (docs/PROTOCOL.md). ${NAME} values come from the root .env under
-# `skali dev` and from `skali values` for remote environments.
+# only (docs/PROTOCOL.md). ${NAME} values come from .env under `skali dev`
+# and from .env.<environment> (e.g. .env.staging) staged by `skali deploy`.
 name: group-balance
 description: End-to-end encrypted group ledger server
 applications:
@@ -47,8 +47,11 @@ applications:
       gracePeriod: 30s
     commands:
       migrate: [go, run, ./cmd/server, migrate]
+      # Go tests against the dev database (they only add rows).
+      test: [sh, -c, 'TEST_DATABASE_URL="$DATABASE_URL" go test ./...']
     dev:
-      command: [go, run, ./cmd/server, serve]
+      # Migrate first, like the release command does on a deploy.
+      command: [sh, -c, 'go build -o bin/server ./cmd/server && bin/server migrate && exec bin/server serve']
 databases:
   data:
     engine: postgres

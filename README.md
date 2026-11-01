@@ -20,17 +20,25 @@ Start with `docs/PLAN.md`, then `docs/PROTOCOL.md`.
 
 ## Development
 
-```sh
-docker compose up -d                       # Postgres on 127.0.0.1:55441
-cp .env.example .env                       # set ADMIN_TOKEN: openssl rand -base64 32
-set -a && . ./.env && set +a
-go run ./cmd/server migrate
-go run ./cmd/server                        # http://localhost:8080/v1/info
+Local runs use [skali](https://github.com/Hinkolas/skali) (`skali.yaml`):
+`skali dev` starts Postgres on the local skali platform and the Go server on
+this Mac, which migrates and then serves at `https://group-balance.localhost`
+(the platform's development CA; `skali dev` trusts it on the Mac).
 
-# tests
-TEST_DATABASE_URL=$DATABASE_URL go test ./...
+```sh
+cp .env.example .env                       # set ADMIN_TOKEN: openssl rand -base64 32
+skali dev --env-file .env                  # Ctrl-C pauses, data stays
+curl https://group-balance.localhost/v1/info
+
+# tests (with skali dev running)
+skali dev run test                         # Go, against the dev database
 (cd apps/apple/Packages/LedgerCore && swift test)
-(cd apps/apple/Packages/LedgerSync && GB_TEST_SERVER=http://localhost:8080 GB_TEST_OWNER_TOKEN=$ADMIN_TOKEN swift test)
+(cd apps/apple/Packages/LedgerSync && GB_TEST_SERVER=https://group-balance.localhost \
+  GB_TEST_OWNER_TOKEN=$(grep ^ADMIN_TOKEN= ../../../../.env | cut -d= -f2-) swift test)
+
+# database shell, other commands
+skali dev sql data
+skali dev run migrate
 
 # regenerate crypto vectors after a protocol change
 go run ./cmd/server vectors spec/vectors
@@ -39,10 +47,33 @@ go run ./cmd/server vectors spec/vectors
 open apps/apple/GroupBalance.xcodeproj
 ```
 
-In the app: **Create a group → Add server** with `http://localhost:8080` and
-the `ADMIN_TOKEN` from `.env` (the simulator reaches the Mac's localhost).
-Then add a member and copy the invite link; on a second simulator or device,
-**Join with an invite** and paste it.
+The iOS Simulator has its own trust store. Add the development CA once per
+simulator (it changes only after `skali dev reset`):
+
+```sh
+security find-certificate -c "skali local dev CA" -p -a ~/Library/Keychains/login.keychain-db /Library/Keychains/System.keychain > /tmp/skali-dev-ca.pem
+xcrun simctl keychain booted add-root-cert /tmp/skali-dev-ca.pem
+```
+
+In the app: **Create a group → Add server** with
+`https://group-balance.localhost` and the `ADMIN_TOKEN` from `.env`. Then add
+a member and copy the invite link; on a second simulator or device, **Join
+with an invite** and paste it.
+
+## Staging
+
+`https://group-balance.staging.khz.dev` on the `khz` skali cluster, with
+values from `.env.staging` (git-ignored; same keys as `.env.example`, its
+own `ADMIN_TOKEN`).
+
+```sh
+skali plan --environment staging --env-file .env.staging
+skali deploy --environment staging --env-file .env.staging
+skali logs --environment staging
+```
+
+The deploy builds the `Dockerfile`, runs `/server migrate` as the release
+command and waits for health and the TLS certificate.
 
 ## Run on your iPhone
 
@@ -65,8 +96,6 @@ open apps/apple/GroupBalance.xcodeproj
 3. With a free team, trust the developer once on the phone: Settings →
    General → VPN & Device Management.
 
-**Server.** The phone can't reach `localhost`. Either run the server on the
-Mac as above and add it in the app as `http://<mac-name>.local:8080` (the
-Mac's name from System Settings → General → Sharing → Local hostname; phone
-on the same Wi-Fi), or deploy it with `skali.yaml` and use its HTTPS
-domain. Plain HTTP only works on the local network.
+**Server.** The phone can't reach `group-balance.localhost`. Use staging,
+`https://group-balance.staging.khz.dev`, with the `ADMIN_TOKEN` from
+`.env.staging`.

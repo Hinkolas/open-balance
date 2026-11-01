@@ -5,7 +5,7 @@ import Testing
 
 /// End to end against a running server:
 ///   ADMIN_TOKEN=… DATABASE_URL=… go run ./cmd/server
-///   GB_TEST_SERVER=http://localhost:8080 GB_TEST_OWNER_TOKEN=… swift test
+///   GB_TEST_SERVER=https://group-balance.localhost GB_TEST_OWNER_TOKEN=… swift test
 /// Skipped without GB_TEST_SERVER.
 private let env = ProcessInfo.processInfo.environment
 private let enabled = env["GB_TEST_SERVER"] != nil

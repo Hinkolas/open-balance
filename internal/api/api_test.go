@@ -23,7 +23,7 @@ import (
 const ownerToken = "test-owner-token-0123456789abcdef"
 
 // testServer runs the real router against TEST_DATABASE_URL
-// (`docker compose up -d`, see .env.example). Skipped without it.
+// (`skali dev run test` sets it to the dev database). Skipped without it.
 func testServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
