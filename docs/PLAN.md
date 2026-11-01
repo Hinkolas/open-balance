@@ -93,18 +93,20 @@ members), and a separate **+**.
 0. **Spec**: `docs/PROTOCOL.md`, math vectors (`spec/vectors/balances.json`,
    `transfers.json`). Repo, README, CLAUDE.md. ✓ 2026-11-01
 1. **Go protocol + vectors**: `internal/protocol` (envelope, signatures,
-   chain, request signing), `cmd/server vectors` generates `crypto.json` and
-   `ledger.json` (signed event sequences → expected state and rejections).
+   chain, request signing), `cmd/server vectors` generates `crypto.json`. ✓ 2026-11-01
+   Open: `ledger.json` (signed event sequences → state and rejections); the
+   reducer rules are covered by Swift tests for now.
 2. **Server**: migrations, sqlc queries, endpoints, request auth, quotas, SSE
    via LISTEN/NOTIFY, owner endpoints, Dockerfile, `skali.yaml`, tests
-   against Postgres.
+   against Postgres. ✓ 2026-11-01 (not deployed yet)
 3. **LedgerCore** (Swift): crypto, envelope, reducer, balances, transfers. All
-   vectors green.
-4. **LedgerSync** (Swift): client, request signing, outbox, local store, SSE,
-   integration tests against a local server.
+   vectors green. ✓ 2026-11-01
+4. **LedgerSync** (Swift): client, request signing, outbox, local cache (JSON
+   files for now, GRDB if ledgers grow), SSE, integration test against a
+   local server. ✓ 2026-11-01
 5. **iOS UI**: Design package, shell, create group, add member + QR, join,
    overview, payment forms, payment detail with arrivals, history,
-   German + English.
+   German + English. First version ✓ 2026-11-01, not yet run in a simulator.
 6. **Release**: App Store assets, privacy copy (what the server sees),
    deploy to skali at the production domain.
 

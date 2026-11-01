@@ -1,0 +1,1876 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ added %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat %2$@ hinzugefügt"
+          }
+        }
+      }
+    },
+    "%@ added “%@”": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat „%2$@“ eingetragen"
+          }
+        }
+      }
+    },
+    "%@ arrived": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ angekommen"
+          }
+        }
+      }
+    },
+    "%@ confirmed money arrived at %@ for “%@”": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat bestätigt, dass Geld bei %2$@ angekommen ist (für „%3$@“)"
+          }
+        }
+      }
+    },
+    "%@ created the group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat die Gruppe erstellt"
+          }
+        }
+      }
+    },
+    "%@ deleted “%@”": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat „%2$@“ gelöscht"
+          }
+        }
+      }
+    },
+    "%@ edited “%@”": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat „%2$@“ bearbeitet"
+          }
+        }
+      }
+    },
+    "%@ joined": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist beigetreten"
+          }
+        }
+      }
+    },
+    "%@ removed a confirmed arrival": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat einen bestätigten Eingang entfernt"
+          }
+        }
+      }
+    },
+    "%@ renamed a member to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat ein Mitglied in %2$@ umbenannt"
+          }
+        }
+      }
+    },
+    "%@ renamed the group to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat die Gruppe in %2$@ umbenannt"
+          }
+        }
+      }
+    },
+    "%@ renewed the invite of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat die Einladung von %2$@ erneuert"
+          }
+        }
+      }
+    },
+    "%@ wrote an event this app doesn't know (%@)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat einen Eintrag geschrieben, den diese App nicht kennt (%2$@)"
+          }
+        }
+      }
+    },
+    "%@ · %@ → %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ → %3$@"
+          }
+        }
+      }
+    },
+    "%@ · income at %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · Eingang bei %2$@"
+          }
+        }
+      }
+    },
+    "%@ · paid by %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · bezahlt von %2$@"
+          }
+        }
+      }
+    },
+    "%@: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%lld members · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld Mitglieder · %2$@"
+          }
+        }
+      }
+    },
+    "Add": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eintragen"
+          }
+        }
+      }
+    },
+    "Add a server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server hinzufügen"
+          }
+        }
+      }
+    },
+    "Add and show invite": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen und Einladung zeigen"
+          }
+        }
+      }
+    },
+    "Add member": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitglied hinzufügen"
+          }
+        }
+      }
+    },
+    "Add server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server hinzufügen"
+          }
+        }
+      }
+    },
+    "Add the person by name. You'll get a QR code that only lets them join as this member, once.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg die Person mit Namen an. Du bekommst einen QR-Code, mit dem genau sie einmal als dieses Mitglied beitreten kann."
+          }
+        }
+      }
+    },
+    "Added by %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingetragen von %@"
+          }
+        }
+      }
+    },
+    "Adding…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird hinzugefügt…"
+          }
+        }
+      }
+    },
+    "Admin": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin"
+          }
+        }
+      }
+    },
+    "Admin token": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin-Token"
+          }
+        }
+      }
+    },
+    "Amount": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betrag"
+          }
+        }
+      }
+    },
+    "Amounts add up to %@, not %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Beträge ergeben %1$@, nicht %2$@."
+          }
+        }
+      }
+    },
+    "Arrivals": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingänge"
+          }
+        }
+      }
+    },
+    "Arrived at": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingang bei"
+          }
+        }
+      }
+    },
+    "Balance": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balance"
+          }
+        }
+      }
+    },
+    "Balances": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salden"
+          }
+        }
+      }
+    },
+    "Belongs to": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gehört"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        }
+      }
+    },
+    "Check the value for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüf den Wert für %@."
+          }
+        }
+      }
+    },
+    "Checking…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird geprüft…"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert"
+          }
+        }
+      }
+    },
+    "Copy link": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link kopieren"
+          }
+        }
+      }
+    },
+    "Counts once the receiver confirms the money arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zählt, sobald der Empfänger bestätigt, dass das Geld angekommen ist."
+          }
+        }
+      }
+    },
+    "Create a group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppe erstellen"
+          }
+        }
+      }
+    },
+    "Create group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppe erstellen"
+          }
+        }
+      }
+    },
+    "Creating…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird erstellt…"
+          }
+        }
+      }
+    },
+    "Currency": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Währung"
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datum"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        }
+      }
+    },
+    "Delete this payment?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zahlung löschen?"
+          }
+        }
+      }
+    },
+    "Dinner": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abendessen"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
+          }
+        }
+      }
+    },
+    "Edit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit payment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahlung bearbeiten"
+          }
+        }
+      }
+    },
+    "End-to-end encrypted": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselt"
+          }
+        }
+      }
+    },
+    "Equal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gleich"
+          }
+        }
+      }
+    },
+    "Every amount in the group is in this currency. It can't be changed later.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Beträge der Gruppe sind in dieser Währung. Sie lässt sich später nicht ändern."
+          }
+        }
+      }
+    },
+    "Everyone is settled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle sind quitt."
+          }
+        }
+      }
+    },
+    "Exact": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genau"
+          }
+        }
+      }
+    },
+    "Expense": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgabe"
+          }
+        }
+      }
+    },
+    "For": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für"
+          }
+        }
+      }
+    },
+    "From": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von"
+          }
+        }
+      }
+    },
+    "Group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppe"
+          }
+        }
+      }
+    },
+    "Group name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name der Gruppe"
+          }
+        }
+      }
+    },
+    "Groups live on a server you run. Add it with its admin token to create groups there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppen liegen auf einem Server, den du betreibst. Füg ihn mit seinem Admin-Token hinzu, um dort Gruppen zu erstellen."
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historie"
+          }
+        }
+      }
+    },
+    "History can't be verified": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlauf lässt sich nicht prüfen"
+          }
+        }
+      }
+    },
+    "Ignored: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignoriert: %@"
+          }
+        }
+      }
+    },
+    "Income": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingang"
+          }
+        }
+      }
+    },
+    "Info": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        }
+      }
+    },
+    "Invite": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einladen"
+          }
+        }
+      }
+    },
+    "Invite QR code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-Code der Einladung"
+          }
+        }
+      }
+    },
+    "Invite for": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einladung für"
+          }
+        }
+      }
+    },
+    "Invited, not joined yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingeladen, noch nicht beigetreten"
+          }
+        }
+      }
+    },
+    "Invoice 42, first instalment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechnung 42, erste Rate"
+          }
+        }
+      }
+    },
+    "Italy 2026": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italien 2026"
+          }
+        }
+      }
+    },
+    "Join a group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppe beitreten"
+          }
+        }
+      }
+    },
+    "Join group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitreten"
+          }
+        }
+      }
+    },
+    "Join with an invite": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Einladung beitreten"
+          }
+        }
+      }
+    },
+    "Joined": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beigetreten"
+          }
+        }
+      }
+    },
+    "Joining…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trete bei…"
+          }
+        }
+      }
+    },
+    "Leave one member empty to give them the rest.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lass ein Mitglied leer, dann bekommt es den Rest."
+          }
+        }
+      }
+    },
+    "Let %@ scan this with their camera. It works once and contains the group's key: show it only to them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lass %@ diesen Code mit der Kamera scannen. Er funktioniert einmal und enthält den Schlüssel der Gruppe: zeig ihn nur dieser Person."
+          }
+        }
+      }
+    },
+    "Loading…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird geladen…"
+          }
+        }
+      }
+    },
+    "Members": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitglieder"
+          }
+        }
+      }
+    },
+    "Money that came in for the group: who received it, and whom it belongs to.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geld, das für die Gruppe reinkam: wer es erhalten hat und wem es gehört."
+          }
+        }
+      }
+    },
+    "Money that should arrive. It counts once it's confirmed here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geld, das ankommen soll. Es zählt, sobald es hier bestätigt ist."
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        }
+      }
+    },
+    "New group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Gruppe"
+          }
+        }
+      }
+    },
+    "New payment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Zahlung"
+          }
+        }
+      }
+    },
+    "Note": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notiz"
+          }
+        }
+      }
+    },
+    "Nothing has happened yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch ist nichts passiert."
+          }
+        }
+      }
+    },
+    "Nothing yet. Tap + to add the first payment.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts da. Tipp auf +, um die erste Zahlung einzutragen."
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Offline. %lld change(s) waiting.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline. %lld Änderung(en) warten."
+          }
+        }
+      }
+    },
+    "Only one member can take the rest.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur ein Mitglied kann den Rest bekommen."
+          }
+        }
+      }
+    },
+    "Only the group admin can do this.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das kann nur der Admin der Gruppe."
+          }
+        }
+      }
+    },
+    "Optional": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional"
+          }
+        }
+      }
+    },
+    "Or paste the invite link": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oder Einladungslink einfügen"
+          }
+        }
+      }
+    },
+    "Overview": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersicht"
+          }
+        }
+      }
+    },
+    "Paid by": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bezahlt von"
+          }
+        }
+      }
+    },
+    "Paying back what you owe.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurückzahlen, was du schuldest."
+          }
+        }
+      }
+    },
+    "Payments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahlungen"
+          }
+        }
+      }
+    },
+    "Percent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prozent"
+          }
+        }
+      }
+    },
+    "Percentages add up to %@ %%.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Prozente ergeben %@ %%."
+          }
+        }
+      }
+    },
+    "Pick at least one member.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähl mindestens ein Mitglied."
+          }
+        }
+      }
+    },
+    "Plus %@ expected once it arrives.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dazu %@ erwartet, sobald es ankommt."
+          }
+        }
+      }
+    },
+    "Record arrival": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingang bestätigen"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        }
+      }
+    },
+    "Remove arrival": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingang entfernen"
+          }
+        }
+      }
+    },
+    "Remove from this device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von diesem Gerät entfernen"
+          }
+        }
+      }
+    },
+    "Remove this group from this device?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Gruppe von diesem Gerät entfernen?"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbenennen"
+          }
+        }
+      }
+    },
+    "Rename group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppe umbenennen"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sichern"
+          }
+        }
+      }
+    },
+    "Scan": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannen"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Server URL": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server-URL"
+          }
+        }
+      }
+    },
+    "Server owner": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server-Betreiber"
+          }
+        }
+      }
+    },
+    "Servers you own": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Server"
+          }
+        }
+      }
+    },
+    "Settle up": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Begleichen"
+          }
+        }
+      }
+    },
+    "Share link": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link teilen"
+          }
+        }
+      }
+    },
+    "Shares": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteile"
+          }
+        }
+      }
+    },
+    "Someone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemand"
+          }
+        }
+      }
+    },
+    "Someone already joined as this member.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als dieses Mitglied ist schon jemand beigetreten."
+          }
+        }
+      }
+    },
+    "Someone paid for others.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemand hat für andere bezahlt."
+          }
+        }
+      }
+    },
+    "Split both sides freely": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide Seiten frei aufteilen"
+          }
+        }
+      }
+    },
+    "Still expected: %@. Record instalments one by one as they come in.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch erwartet: %@. Trag Raten einzeln ein, sobald sie ankommen."
+          }
+        }
+      }
+    },
+    "Syncing %lld change(s)…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronisiere %lld Änderung(en)…"
+          }
+        }
+      }
+    },
+    "That QR code is not a Group Balance invite.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser QR-Code ist keine Group-Balance-Einladung."
+          }
+        }
+      }
+    },
+    "That is not a valid URL.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist keine gültige URL."
+          }
+        }
+      }
+    },
+    "That is not a valid invite link.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein gültiger Einladungslink."
+          }
+        }
+      }
+    },
+    "The admin token is the server's ADMIN_TOKEN. It lets this device create groups on the server; it never gives access to any group's contents.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Admin-Token ist das ADMIN_TOKEN des Servers. Damit kann dieses Gerät dort Gruppen erstellen; Zugriff auf Inhalte einer Gruppe gibt es nie."
+          }
+        }
+      }
+    },
+    "The fewest transfers that settle everyone. Debts are netted through the group: if A owes B and B owes C, A pays C.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die wenigsten Überweisungen, mit denen alle quitt sind. Schulden werden über die Gruppe verrechnet: Schuldet A B und B C, zahlt A an C."
+          }
+        }
+      }
+    },
+    "The group stays on the server and with the other members. You can only come back with a new invite from the admin.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Gruppe bleibt auf dem Server und bei den anderen. Zurück kommst du nur mit einer neuen Einladung vom Admin."
+          }
+        }
+      }
+    },
+    "This group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Gruppe"
+          }
+        }
+      }
+    },
+    "This invite doesn't match a member of the group.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Einladung passt zu keinem Mitglied der Gruppe."
+          }
+        }
+      }
+    },
+    "This invite has already been used. Ask the admin for a new one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Einladung wurde schon benutzt. Bitte den Admin um eine neue."
+          }
+        }
+      }
+    },
+    "This link is not a valid Group Balance invite.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link ist keine gültige Group-Balance-Einladung."
+          }
+        }
+      }
+    },
+    "This payment no longer exists.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zahlung gibt es nicht mehr."
+          }
+        }
+      }
+    },
+    "This server doesn't speak protocol version 1.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Server spricht Protokollversion 1 nicht."
+          }
+        }
+      }
+    },
+    "This was edited by two people at the same time. The later edit won.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das wurde gleichzeitig von zwei Personen bearbeitet. Die spätere Änderung gilt."
+          }
+        }
+      }
+    },
+    "To": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An"
+          }
+        }
+      }
+    },
+    "To join, ask the group's admin to add you and show you your invite QR code.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Beitreten: Bitte den Admin der Gruppe, dich hinzuzufügen und dir deinen Einladungs-QR-Code zu zeigen."
+          }
+        }
+      }
+    },
+    "Track money in a group: who received what, whom it belongs to, what has arrived, and who pays whom in the end. Only members can read it, not even the server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behalte Geld in der Gruppe im Blick: wer was erhalten hat, wem es gehört, was angekommen ist und wer am Ende wem zahlt. Lesen können es nur Mitglieder, nicht einmal der Server."
+          }
+        }
+      }
+    },
+    "Unknown date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekanntes Datum"
+          }
+        }
+      }
+    },
+    "Unknown member": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekanntes Mitglied"
+          }
+        }
+      }
+    },
+    "Unreadable event": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlesbarer Eintrag"
+          }
+        }
+      }
+    },
+    "Waiting for arrival": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wartet auf Eingang"
+          }
+        }
+      }
+    },
+    "What arrived at %@?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist bei %@ angekommen?"
+          }
+        }
+      }
+    },
+    "What arrived?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist angekommen?"
+          }
+        }
+      }
+    },
+    "What for": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wofür"
+          }
+        }
+      }
+    },
+    "What the group owes you (+) or what you owe the group (−), counting only money that has arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was die Gruppe dir schuldet (+) oder du der Gruppe (−). Es zählt nur Geld, das angekommen ist."
+          }
+        }
+      }
+    },
+    "Who pays whom": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer zahlt wem"
+          }
+        }
+      }
+    },
+    "Who receives the money. Only what they confirm as arrived counts.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer das Geld erhält. Es zählt nur, was als angekommen bestätigt ist."
+          }
+        }
+      }
+    },
+    "With a server's admin token this device can create groups there. The token never gives access to any group's contents.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit dem Admin-Token eines Servers kann dieses Gerät dort Gruppen erstellen. Zugriff auf Inhalte einer Gruppe gibt das Token nie."
+          }
+        }
+      }
+    },
+    "You": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du"
+          }
+        }
+      }
+    },
+    "You get money back.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bekommst Geld."
+          }
+        }
+      }
+    },
+    "You join as the member the admin created for you. Your key stays on your devices and in your iCloud Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du trittst als das Mitglied bei, das der Admin für dich angelegt hat. Dein Schlüssel bleibt auf deinen Geräten und in deinem iCloud-Schlüsselbund."
+          }
+        }
+      }
+    },
+    "You owe money.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du schuldest Geld."
+          }
+        }
+      }
+    },
+    "You're settled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bist quitt."
+          }
+        }
+      }
+    },
+    "Your balance": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Saldo"
+          }
+        }
+      }
+    },
+    "Your groups": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Gruppen"
+          }
+        }
+      }
+    },
+    "Your name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Name"
+          }
+        }
+      }
+    },
+    "Your name in the group": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Name in der Gruppe"
+          }
+        }
+      }
+    },
+    "a payment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eine Zahlung"
+          }
+        }
+      }
+    },
+    "arrived": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "angekommen"
+          }
+        }
+      }
+    },
+    "by %@ · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von %1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "can't be decrypted": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nicht entschlüsselbar"
+          }
+        }
+      }
+    },
+    "deleted": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gelöscht"
+          }
+        }
+      }
+    },
+    "duplicate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "doppelt"
+          }
+        }
+      }
+    },
+    "edited by %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bearbeitet von %@"
+          }
+        }
+      }
+    },
+    "expected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erwartet"
+          }
+        }
+      }
+    },
+    "invalid content": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ungültiger Inhalt"
+          }
+        }
+      }
+    },
+    "invite doesn't match": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einladung passt nicht"
+          }
+        }
+      }
+    },
+    "invited": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eingeladen"
+          }
+        }
+      }
+    },
+    "malformed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fehlerhaft"
+          }
+        }
+      }
+    },
+    "member already joined": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitglied ist schon beigetreten"
+          }
+        }
+      }
+    },
+    "not allowed for this member": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "für dieses Mitglied nicht erlaubt"
+          }
+        }
+      }
+    },
+    "not synced yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "noch nicht synchronisiert"
+          }
+        }
+      }
+    },
+    "out of place": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an falscher Stelle"
+          }
+        }
+      }
+    },
+    "refers to something that doesn't exist": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bezieht sich auf etwas, das es nicht gibt"
+          }
+        }
+      }
+    },
+    "rest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rest"
+          }
+        }
+      }
+    },
+    "settled": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quitt"
+          }
+        }
+      }
+    },
+    "signature doesn't match the author": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signatur passt nicht zum Autor"
+          }
+        }
+      }
+    },
+    "to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an %@"
+          }
+        }
+      }
+    },
+    "to you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an dich"
+          }
+        }
+      }
+    },
+    "unknown author": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unbekannter Autor"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

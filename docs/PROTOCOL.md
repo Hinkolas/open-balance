@@ -389,8 +389,22 @@ For each event in ledger order:
 5. Look up the author's key (§8.2). None: **invalid** `unknown_author`.
 6. Verify the signature. Failure: **invalid** `bad_signature`.
 7. Apply type validation and permissions (§7). Failure: **invalid** with a
-   reason code, see `spec/vectors/ledger.json`.
+   reason code:
+
+   | Code | Meaning |
+   |---|---|
+   | `forbidden` | the author may not do this (§7 "Who") |
+   | `invalid_data` | fields out of range, sums don't match, unknown members, key reuse |
+   | `unknown_target` | the member, payment or arrival referred to doesn't exist (or is deleted, or isn't tracked) |
+   | `duplicate_id` | an event id, member id, payment id or arrival id that already exists |
+   | `misplaced` | `group.created` anywhere but `seq = 1` |
+   | `already_claimed` | claiming or renewing a member that is claimed |
+   | `bad_invite_sig` | `inviteSig` doesn't verify with the member's current invite key |
+
 8. Apply.
+
+`seen.seq` greater than or equal to the event's own `seq` makes the event
+**invalid** `malformed`.
 
 An invalid event changes no state. It stays in the history, marked with the
 reason, so everyone sees the same thing and who caused it.

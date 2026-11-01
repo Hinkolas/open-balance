@@ -17,3 +17,9 @@ normative contract), then `docs/DESIGN.md`.
 - No colors or fonts in views; tokens come from the `Design` package.
 - UI copy in German and English (String Catalogs), German with informal "du".
 - `ADMIN_TOKEN`, group secrets and private keys never appear in logs.
+
+## Commands
+See README.md "Development". Swift packages test with `swift test` in their
+directory; the app builds with
+`xcodebuild -project apps/apple/GroupBalance.xcodeproj -scheme GroupBalance -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build`.
+UI strings: English keys in code, German in `apps/apple/GroupBalance/Localizable.xcstrings`.
