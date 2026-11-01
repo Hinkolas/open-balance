@@ -26,3 +26,7 @@ See README.md "Development". Swift packages test with `swift test` in their
 directory; the app builds with
 `xcodebuild -project apps/apple/GroupBalance.xcodeproj -scheme GroupBalance -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build`.
 UI strings: English keys in code, German in `apps/apple/GroupBalance/Localizable.xcstrings`.
+After editing the catalog by hand, let Xcode normalize it so builds in Xcode
+don't rewrite it:
+`xcodebuild -exportLocalizations -project apps/apple/GroupBalance.xcodeproj -localizationPath /tmp/gb-l10n -exportLanguage de -skipPackagePluginValidation`.
+Strings used only in Swift packages (e.g. `FlowError`) are `"extractionState" : "manual"`.
