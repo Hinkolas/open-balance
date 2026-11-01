@@ -3,9 +3,9 @@ import LedgerCore
 import LedgerSync
 import SwiftUI
 
-/// The active group at a glance: your balance, who pays whom, money waiting
-/// to be confirmed, everyone's balance line, latest payments. Settling has
-/// its own screen, where arrived and expected plans can be compared.
+/// The active group at a glance: your balance, money waiting to be
+/// confirmed, everyone's balance line, latest payments. Who pays whom lives
+/// in the Settle up tab.
 struct OverviewView: View {
     let session: GroupSession
     @State private var draft: PaymentDraft?
@@ -31,7 +31,6 @@ struct OverviewView: View {
                     }
                 }
             }
-            transfers(summary)
             waiting(state)
             balances(state, summary)
             recent(state)
@@ -44,7 +43,6 @@ struct OverviewView: View {
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
         .navigationDestination(for: OverviewRoute.self) { route in
             switch route {
-            case .settle: SettleView(session: session)
             case .allPayments: AllPaymentsView(session: session)
             }
         }
@@ -80,32 +78,6 @@ struct OverviewView: View {
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 
-    @ViewBuilder private func transfers(_ summary: Balances.Summary) -> some View {
-        let stillExpected = summary.pendingHeld.values.reduce(0, +)
-        Section {
-            if summary.transfers.isEmpty {
-                Label("Everyone is settled.", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(Theme.positive)
-            }
-            ForEach(summary.transfers, id: \.self) { t in
-                TransferRow(session: session, transfer: t)
-            }
-            if !summary.transfers.isEmpty || summary.expectedDiffers {
-                NavigationLink(value: OverviewRoute.settle) {
-                    Label("Settle up", systemImage: "arrow.left.arrow.right")
-                }
-            }
-        } header: {
-            Text("Who pays whom")
-        } footer: {
-            if summary.expectedDiffers {
-                Text("Changes once the \(session.money(stillExpected)) still expected has arrived.")
-            } else if !summary.transfers.isEmpty {
-                Text("The fewest transfers that settle everyone, netted through the group.")
-            }
-        }
-    }
-
     @ViewBuilder private func waiting(_ state: LedgerState) -> some View {
         let items = Waiting.items(in: state) { $0 == session.me || state.members[$0]?.isClaimed == false }
         if !items.isEmpty {
@@ -128,8 +100,6 @@ struct OverviewView: View {
                 }
             } header: {
                 Text("Waiting for arrival")
-            } footer: {
-                Text("Swipe right when money arrived. It counts once it's confirmed.")
             }
         }
     }
@@ -192,7 +162,7 @@ struct OverviewView: View {
 
 struct PaymentRoute: Hashable { let id: PaymentID }
 
-enum OverviewRoute: Hashable { case settle, allPayments }
+enum OverviewRoute: Hashable { case allPayments }
 
 extension [PaymentRecord] {
     /// By payment date, then by when they were added; newest first.

@@ -13,21 +13,22 @@ both first-class and follow the system.
 
 ## Structure
 
-- **Tabs** (sections, never actions): Overview, History, Group. On iPhone Duo
-  and iPad they sit in the side rail.
-- **+ is a toolbar button**, top trailing on Overview and History, a native
-  `Menu` with Income, Expense, Settle up. Liquid Glass renders it as the round
-  glass button, like Apple Music's add and more buttons.
+- **Tabs** (sections, never actions): Overview, Settle up, History, Group.
+  On iPhone Duo and iPad they sit in the side rail.
+- **+ is a toolbar button**, top trailing on Overview, Settle up and
+  History, a native `Menu` with Income, Expense, Settle up. Liquid Glass
+  renders it as the round glass button, like Apple Music's add and more
+  buttons.
 - **Group switcher** is the navigation title menu (`toolbarTitleMenu`).
 - **Lists** are `List` / `Form` with `.insetGrouped` style; sections with
   headers and footers instead of custom labels, cards or hairlines.
 - **Sheets** for self-contained tasks (new payment, record arrival, invite,
   join, create group). Cancel leading, the action trailing.
 - **Overview** shows your balance (with the expected balance once pending
-  money arrives), a read-only Who pays whom that ends in a `Settle up` row,
-  money waiting for arrival, balances, and the 5 latest payments with a
-  `Show all` row (badge = count) that pushes the full, searchable list.
-- **Settle up** is a pushed screen, not inline buttons. A segmented
+  money arrives), money waiting for arrival, balances, and the 5 latest
+  payments with a `Show all` row (badge = count) that pushes the full,
+  searchable list. Who pays whom is not on it.
+- **Settle up** is its own tab, not inline buttons. A segmented
   `Arrived | Expected` picker in the navigation bar switches between what is
   owed now and the plan once everything arrives (PROTOCOL.md §9.4). Arrived
   warns when pending money would change the plan; Expected is marked "not

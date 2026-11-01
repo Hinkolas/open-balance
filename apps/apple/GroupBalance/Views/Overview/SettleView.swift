@@ -3,7 +3,7 @@ import LedgerCore
 import LedgerSync
 import SwiftUI
 
-/// How to settle: who pays whom with the money that has arrived, or with
+/// The Settle up tab: who pays whom with the money that has arrived, or with
 /// everything that is still expected (PROTOCOL.md §9.4), so nobody settles
 /// just before a pending payment turns the plan around.
 struct SettleView: View {
@@ -97,8 +97,10 @@ struct SettleView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
+            AddPaymentMenu(session: session, draft: $draft)
         }
         .refreshable { try? await session.syncNow() }
+        .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
     }
 

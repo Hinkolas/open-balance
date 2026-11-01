@@ -441,16 +441,6 @@
         }
       }
     },
-    "Changes once the %@ still expected has arrived.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ändert sich, sobald die noch erwarteten %@ angekommen sind."
-          }
-        }
-      }
-    },
     "Confirm": {
       "localizations": {
         "de": {
@@ -1487,16 +1477,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch erwartet: %@. Bestätige Raten einzeln, sobald sie ankommen."
-          }
-        }
-      }
-    },
-    "Swipe right when money arrived. It counts once it's confirmed.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wisch nach rechts, wenn Geld angekommen ist. Es zählt, sobald es bestätigt ist."
           }
         }
       }
