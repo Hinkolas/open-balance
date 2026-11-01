@@ -9,3 +9,6 @@ DerivedData/
 .build/
 .swiftpm/
 *.xcuserstate
+
+# Personal signing settings (apps/apple/Signing.xcconfig)
+Signing.local.xcconfig
