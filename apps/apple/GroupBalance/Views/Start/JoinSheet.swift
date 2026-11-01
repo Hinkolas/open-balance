@@ -17,43 +17,58 @@ struct JoinSheet: View {
 
     var body: some View {
         NavigationStack {
-            GBPage {
-                GBPageHeader(eyebrow: String(localized: "Invite"), title: String(localized: "Join a group"))
-                    .padding(.top, 8)
+            Form {
                 if let link {
-                    GBSectionLabel(String(localized: "Server"))
-                    Text(link.server.host() ?? link.server.absoluteString).font(GBFont.mono(15)).foregroundStyle(GB.ink)
-                    Text("You join as the member the admin created for you. Your key stays on your devices and in your iCloud Keychain.")
-                        .font(GBFont.secondary).foregroundStyle(GB.ink2).padding(.top, 12)
-                    GBPrimaryButton(joining ? String(localized: "Joining…") : String(localized: "Join group")) { join(link) }
-                        .disabled(joining)
-                        .padding(.top, 28)
+                    Section {
+                        LabeledContent("Server", value: link.server.host() ?? link.server.absoluteString)
+                    } footer: {
+                        Text("You join as the member the admin created for you. Your key stays on your devices and in your iCloud Keychain.")
+                    }
                 } else {
                     #if canImport(VisionKit) && os(iOS)
                     if DataScannerViewController.isSupported {
-                        GBSectionLabel(String(localized: "Scan"))
-                        QRScanner { scanned in
-                            if let l = InviteLink(text: scanned) { link = l } else { error = String(localized: "That QR code is not a Group Balance invite.") }
+                        Section("Scan the QR code") {
+                            QRScanner { scanned in
+                                if let l = InviteLink(text: scanned) { link = l } else { error = String(localized: "That QR code is not a Group Balance invite.") }
+                            }
+                            .frame(height: 260)
+                            .listRowInsets(EdgeInsets())
                         }
-                        .frame(height: 280)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                     #endif
-                    GBSectionLabel(String(localized: "Or paste the invite link"))
-                    GBTextField("groupbalance://join?…", text: $pasted, mono: true)
-                    GBSecondaryButton(String(localized: "Continue")) {
-                        if let l = InviteLink(text: pasted) { link = l } else { error = String(localized: "That is not a valid invite link.") }
+                    Section {
+                        TextField("groupbalance://join?…", text: $pasted, axis: .vertical)
+                            .font(.footnote.monospaced())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: pasted) { _, v in
+                                if let l = InviteLink(text: v) { link = l; error = nil }
+                            }
+                        PasteButton(payloadType: String.self) { strings in
+                            if let s = strings.first { pasted = s }
+                        }
+                    } header: {
+                        Text("Or paste the invite link")
                     }
-                    .padding(.top, 12)
                 }
                 if let error {
-                    Text(error).font(GBFont.secondary).foregroundStyle(GB.red).padding(.top, 16)
+                    Section { Text(error).foregroundStyle(Theme.negative) }
                 }
             }
+            .navigationTitle("Join a group")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if joining {
+                        ProgressView()
+                    } else {
+                        Button("Join") { if let link { join(link) } }.disabled(link == nil)
+                    }
+                }
             }
         }
+        .tint(Theme.tint)
     }
 
     private func join(_ link: InviteLink) {

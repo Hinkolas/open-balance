@@ -19,43 +19,54 @@ struct CreateGroupSheet: View {
 
     var body: some View {
         NavigationStack {
-            GBPage {
-                GBPageHeader(eyebrow: String(localized: "New group"), title: String(localized: "Create a group"))
-                    .padding(.top, 8)
-                GBSectionLabel(String(localized: "Server"))
-                if model.servers.isEmpty {
-                    Text("Groups live on a server you run. Add it with its admin token to create groups there.")
-                        .font(GBFont.secondary).foregroundStyle(GB.ink2)
-                } else {
-                    FlowChips(items: model.servers, title: \.name, selected: server.flatMap { s in model.servers.first { $0.server == s } }) { server = $0.server }
+            Form {
+                Section {
+                    if model.servers.isEmpty {
+                        Button("Add server", systemImage: "server.rack") { showAddServer = true }
+                    } else {
+                        Picker("Server", selection: $server) {
+                            ForEach(model.servers) { Text($0.name).tag(Optional($0.server)) }
+                        }
+                        Button("Add another server", systemImage: "plus") { showAddServer = true }
+                    }
+                } header: {
+                    Text("Server")
+                } footer: {
+                    if model.servers.isEmpty {
+                        Text("Groups live on a server you run. Add it with its admin token to create groups there.")
+                    }
                 }
-                GBSecondaryButton(String(localized: "Add server")) { showAddServer = true }.padding(.top, 10)
-
-                GBSectionLabel(String(localized: "Group name"))
-                GBTextField(String(localized: "Italy 2026"), text: $name, keyboard: .name)
-                GBSectionLabel(String(localized: "Your name in the group"))
-                GBTextField(String(localized: "Your name"), text: $myName, keyboard: .name)
-                GBSectionLabel(String(localized: "Currency"), info: String(localized: "Every amount in the group is in this currency. It can't be changed later."))
-                Picker("Currency", selection: $currency) {
-                    ForEach(Array(Set(Self.currencies + [currency])).sorted(), id: \.self) { Text($0).tag($0) }
+                Section {
+                    TextField("Group name", text: $name).textInputAutocapitalization(.words)
+                    TextField("Your name in the group", text: $myName).textInputAutocapitalization(.words)
                 }
-                .pickerStyle(.menu)
-                .tint(GB.ink)
-
-                GBPrimaryButton(working ? String(localized: "Creating…") : String(localized: "Create group")) { create() }
-                    .disabled(!canCreate || working)
-                    .opacity(canCreate ? 1 : 0.4)
-                    .padding(.top, 32)
+                Section {
+                    Picker("Currency", selection: $currency) {
+                        ForEach(Array(Set(Self.currencies + [currency])).sorted(), id: \.self) { Text($0).tag($0) }
+                    }
+                } footer: {
+                    Text("Every amount in the group is in this currency. It can't be changed later.")
+                }
                 if let error {
-                    Text(error).font(GBFont.secondary).foregroundStyle(GB.red).padding(.top, 16)
+                    Section { Text(error).foregroundStyle(Theme.negative) }
                 }
             }
+            .navigationTitle("New group")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if working {
+                        ProgressView()
+                    } else {
+                        Button("Create") { create() }.disabled(!canCreate)
+                    }
+                }
             }
             .sheet(isPresented: $showAddServer) { AddServerSheet { server = $0 } }
             .onAppear { if server == nil { server = model.servers.first?.server } }
         }
+        .tint(Theme.tint)
     }
 
     private var canCreate: Bool {
@@ -90,31 +101,34 @@ struct AddServerSheet: View {
 
     var body: some View {
         NavigationStack {
-            GBPage {
-                GBPageHeader(eyebrow: String(localized: "Server owner"), title: String(localized: "Add a server"))
-                    .padding(.top, 8)
-                Text("The admin token is the server's ADMIN_TOKEN. It lets this device create groups on the server; it never gives access to any group's contents.")
-                    .font(GBFont.secondary).foregroundStyle(GB.ink2).padding(.top, 12)
-                GBSectionLabel(String(localized: "Server URL"))
-                GBTextField("https://group-balance.example.com", text: $url, keyboard: .email, mono: true)
-                GBSectionLabel(String(localized: "Admin token"))
-                SecureField("", text: $token)
-                    .font(GBFont.mono(16))
-                    .padding(.horizontal, 14)
-                    .frame(height: 48)
-                    .background(GB.paperRaised, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(GB.hairline, lineWidth: 1))
-                GBPrimaryButton(working ? String(localized: "Checking…") : String(localized: "Add server")) { add() }
-                    .disabled(working || url.isEmpty || token.isEmpty)
-                    .padding(.top, 28)
+            Form {
+                Section {
+                    TextField("https://group-balance.example.com", text: $url)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField("Admin token", text: $token)
+                } footer: {
+                    Text("The admin token is the server's ADMIN_TOKEN. It lets this device create groups there; it never gives access to any group's contents.")
+                }
                 if let error {
-                    Text(error).font(GBFont.secondary).foregroundStyle(GB.red).padding(.top, 16)
+                    Section { Text(error).foregroundStyle(Theme.negative) }
                 }
             }
+            .navigationTitle("Add server")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if working {
+                        ProgressView()
+                    } else {
+                        Button("Add") { add() }.disabled(url.isEmpty || token.isEmpty)
+                    }
+                }
             }
         }
+        .tint(Theme.tint)
     }
 
     private func add() {
@@ -136,59 +150,6 @@ struct AddServerSheet: View {
             } catch {
                 self.error = error.localizedDescription
             }
-        }
-    }
-}
-
-/// Wrapping row of choice chips.
-struct FlowChips<Item: Identifiable>: View {
-    let items: [Item]
-    let title: KeyPath<Item, String>
-    let selected: Item?
-    let onSelect: (Item) -> Void
-
-    var body: some View {
-        FlowLayout(spacing: 8) {
-            ForEach(items) { item in
-                GBChoiceChip(item[keyPath: title], selected: item.id == selected?.id) { onSelect(item) }
-            }
-        }
-    }
-}
-
-/// Lays children out left to right, wrapping lines.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, maxX: CGFloat = 0
-        for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width {
-                x = 0
-                y += line + spacing
-                line = 0
-            }
-            x += size.width + spacing
-            maxX = max(maxX, x - spacing)
-            line = max(line, size.height)
-        }
-        return CGSize(width: maxX, height: y + line)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
-        for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += line + spacing
-                line = 0
-            }
-            s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            line = max(line, size.height)
         }
     }
 }

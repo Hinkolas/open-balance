@@ -7,61 +7,54 @@ import SwiftUI
 /// marked with the reason, so everyone sees the same thing.
 struct HistoryView: View {
     let session: GroupSession
+    @State private var draft: PaymentDraft?
 
     var body: some View {
         let items = Array(session.state.history.reversed())
-        let days = Dictionary(grouping: items) { day($0) }
-        let order = days.keys.sorted(by: >)
-        GBPage {
-            GBPageHeader(eyebrow: session.state.name, title: String(localized: "History"))
-                .padding(.top, 8)
+        let days = Dictionary(grouping: items) { Dates.timestamp($0.at).map { Calendar.current.startOfDay(for: $0) } ?? .distantPast }
+        List {
             if items.isEmpty {
-                Text("Nothing has happened yet.").font(GBFont.secondary).foregroundStyle(GB.ink3).padding(.top, 20)
+                ContentUnavailableView("Nothing yet", systemImage: "clock", description: Text("Everything that happens in the group shows up here."))
             }
-            ForEach(order, id: \.self) { d in
-                GBSectionLabel(d)
-                ForEach(days[d] ?? []) { item in
-                    row(item)
+            ForEach(days.keys.sorted(by: >), id: \.self) { day in
+                Section(day == .distantPast ? String(localized: "Unknown date") : day.formatted(date: .complete, time: .omitted)) {
+                    ForEach(days[day] ?? []) { row($0) }
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("History")
+        .toolbar { AddPaymentMenu(session: session, draft: $draft) }
         .refreshable { try? await session.syncNow() }
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
-    }
-
-    private func day(_ item: HistoryItem) -> String {
-        guard let date = Dates.timestamp(item.at) else { return String(localized: "Unknown date") }
-        return date.formatted(date: .complete, time: .omitted)
+        .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
     }
 
     @ViewBuilder private func row(_ item: HistoryItem) -> some View {
-        let content = HStack(alignment: .top, spacing: 12) {
-            Text(Dates.timestamp(item.at)?.formatted(date: .omitted, time: .shortened) ?? "–")
-                .font(GBFont.mono(12)).foregroundStyle(GB.ink3).frame(width: 48, alignment: .leading)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(sentence(item)).font(GBFont.body).foregroundStyle(item.rejection == nil ? GB.ink : GB.ink3)
+        let content = HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(sentence(item))
+                    .foregroundStyle(item.rejection == nil ? .primary : .secondary)
                     .strikethrough(item.rejection != nil)
-                if let r = item.rejection {
-                    Text(String(localized: "Ignored: \(reason(r))")).font(GBFont.secondary).foregroundStyle(GB.red)
+                HStack(spacing: 6) {
+                    Text(Dates.timestamp(item.at)?.formatted(date: .omitted, time: .shortened) ?? "–")
+                    if let r = item.rejection {
+                        Text("Ignored: \(reason(r))").foregroundStyle(Theme.negative)
+                    }
+                    if item.pending { StatusBadge(String(localized: "Not synced yet")) }
                 }
-                if item.pending {
-                    GBTag(String(localized: "not synced yet"), color: GB.ink3, tilted: false)
-                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             if let amount = amount(item) {
-                GBAmount(session.money(amount)).foregroundStyle(item.rejection == nil ? GB.ink : GB.ink3)
+                Amount(session.money(amount), tone: item.rejection == nil ? .neutral : .pending)
             }
         }
-        .padding(.vertical, 10)
-
-        VStack(spacing: 0) {
-            if let pid = paymentID(item), item.rejection == nil, session.state.payments[pid] != nil {
-                NavigationLink(value: PaymentRoute(id: pid)) { content.contentShape(Rectangle()) }.buttonStyle(.plain)
-            } else {
-                content
-            }
-            GBHairline()
+        if let pid = paymentID(item), item.rejection == nil, session.state.payments[pid] != nil {
+            NavigationLink(value: PaymentRoute(id: pid)) { content }
+        } else {
+            content
         }
     }
 
@@ -87,18 +80,19 @@ struct HistoryView: View {
     }
 
     private func sentence(_ item: HistoryItem) -> String {
-        let who = session.name(item.author)
+        // Real names, not "You": the sentences conjugate for a third person.
+        let who = item.author.flatMap { session.state.members[$0]?.name } ?? String(localized: "Someone")
         switch item.data {
         case .groupCreated(let d): return String(localized: "\(d.admin.name) created the group")
         case .groupUpdated(let d): return String(localized: "\(who) renamed the group to \(d.name)")
         case .memberAdded(let d): return String(localized: "\(who) added \(d.name)")
-        case .memberInviteRenewed(let d): return String(localized: "\(who) renewed the invite of \(session.name(d.id))")
-        case .memberClaimed(let d): return String(localized: "\(session.name(d.id)) joined")
+        case .memberInviteRenewed(let d): return String(localized: "\(who) renewed the invite of \(session.state.members[d.id]?.name ?? "")")
+        case .memberClaimed(let d): return String(localized: "\(session.state.members[d.id]?.name ?? "") joined")
         case .memberUpdated(let d): return String(localized: "\(who) renamed a member to \(d.name)")
         case .paymentCreated(let p): return String(localized: "\(who) added “\(p.title)”")
         case .paymentUpdated(let p): return String(localized: "\(who) edited “\(p.title)”")
         case .paymentDeleted(let d): return String(localized: "\(who) deleted “\(title(d.id))”")
-        case .arrivalRecorded(let a): return String(localized: "\(who) confirmed money arrived at \(session.name(a.member)) for “\(title(a.payment))”")
+        case .arrivalRecorded(let a): return String(localized: "\(who) confirmed money arrived at \(session.state.members[a.member]?.name ?? "") for “\(title(a.payment))”")
         case .arrivalRemoved: return String(localized: "\(who) removed a confirmed arrival")
         case .unsupported(let t): return String(localized: "\(who) wrote an event this app doesn't know (\(t))")
         case nil: return String(localized: "Unreadable event")

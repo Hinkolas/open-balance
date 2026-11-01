@@ -14,7 +14,10 @@ normative contract), then `docs/DESIGN.md`.
 - Ordering is the server `seq` only. Never order by client timestamps.
 - Invalid events change no state but stay visible in the history with a reason.
 - Payments are one event type; Income, Expense and Settle up are forms.
-- No colors or fonts in views; tokens come from the `Design` package.
+- UI is native iOS (docs/DESIGN.md): system lists, controls, text styles and
+  colors; `Theme.tint/positive/negative` and the components in the `Design`
+  package for the brand layer. No hex colors or fixed font sizes in views.
+- Product context for design work lives in `PRODUCT.md`.
 - UI copy in German and English (String Catalogs), German with informal "du".
 - `ADMIN_TOKEN`, group secrets and private keys never appear in logs.
 

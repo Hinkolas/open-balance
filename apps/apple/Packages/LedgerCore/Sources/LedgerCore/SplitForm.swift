@@ -132,7 +132,7 @@ public struct SplitForm: Equatable, Sendable {
         order.compactMap { m in
             let a = amounts[m] ?? 0
             let isRest = resolution.restMember == m
-            guard a > 0 || isRest else { return nil }
+            guard a > 0 else { return nil }
             if resolution.usedFallback { return Payment.Line(member: m, amount: a) }
             var line = Payment.Line(member: m, amount: a)
             if case .percent(let bp) = form.field(m, currency: currency) { line.value = bp }

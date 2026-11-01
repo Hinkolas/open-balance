@@ -14,7 +14,7 @@ struct RootView: View {
                 NavigationStack { WelcomeView() }
             }
         }
-        .tint(GB.ink)
+        .tint(Theme.tint)
         .sheet(item: $model.pendingInvite) { JoinSheet(link: $0) }
         .alert(model.toast ?? "", isPresented: Binding(get: { model.toast != nil }, set: { if !$0 { model.toast = nil } })) {
             Button("OK", role: .cancel) {}

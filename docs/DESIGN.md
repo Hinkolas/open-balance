@@ -1,91 +1,87 @@
 # Group Balance – design system
 
-Adopted from the Quitt app. Source of truth for the look:
-`design/Quitt – App-Entwurf iOS & Web.pdf` (8 pages, 5 iOS screens, 3 web
-screens; gamification and receipt scanning are not part of Group Balance).
-This document translates it into tokens. Light is the
-primary theme; dark is derived. Never hardcode a color in a view, use `GB.*`
-from the `Design` package.
+Status: 2026-11-01. Replaces the ported Quitt look (paper, ink, serif). The
+world is **native iOS 26 with a light brand layer**: the platform supplies
+layout, navigation and controls; the brand shows in one tint, in how money is
+set, and in one signature move. Product truth lives in `PRODUCT.md`.
 
-## Principles
+## Scene
 
-- **Paper, ink, two accents.** Warm off-white page, near-black ink, red for
-  stamps and debt, green for credit. Nothing else.
-- **Serif for headlines, mono for money, sans for everything else.** Headlines
-  mix roman and italic ("Fast quitt, *Jonas*."). Every amount, date, counter and
-  ratio is monospaced and tabular.
-- **Hairlines, not cards.** Sections are separated by 1px lines. The only
-  "cards" are the receipt (jagged top/bottom edge) and the dark CTA pill.
-- **Section labels** are 11pt uppercase with wide tracking.
-- **Numbers right-aligned**, always with the currency symbol after a space.
-- **Touch targets ≥ 44pt.** Member chips in the receipt are 36pt squares.
-- **Motion** is restrained: `.snappy(duration: 0.2)` for state, stamps animate
-  in with a short scale from 0.8.
+Partners check a group on the phone between meetings or right after a client
+paid: daylight and office light as often as evening. Light and Dark Mode are
+both first-class and follow the system.
 
-## Tokens
+## Structure
 
-| Token | Light | Use |
+- **Tabs** (sections, never actions): Overview, History, Group. On iPhone Duo
+  and iPad they sit in the side rail.
+- **+ is a toolbar button**, top trailing on Overview and History, a native
+  `Menu` with Income, Expense, Settle up. Liquid Glass renders it as the round
+  glass button, like Apple Music's add and more buttons.
+- **Group switcher** is the navigation title menu (`toolbarTitleMenu`).
+- **Lists** are `List` / `Form` with `.insetGrouped` style; sections with
+  headers and footers instead of custom labels, cards or hairlines.
+- **Sheets** for self-contained tasks (new payment, record arrival, invite,
+  join, create group). Cancel leading, the action trailing.
+- **Multi-step tasks** push steps in the sheet's `NavigationStack`: the back
+  button and swipe-back work, the trailing button says `Next` until the last
+  step, which says `Save`.
+
+## Color
+
+Restrained: system backgrounds and labels, plus
+
+| Role | Value | Use |
 |---|---|---|
-| `GB.paper` | #F4F1EA | page background |
-| `GB.paperRaised` | #FAF8F3 | receipt, sheets |
-| `GB.ink` | #141414 | primary text, dark buttons |
-| `GB.ink2` | #5C5A55 | secondary text |
-| `GB.ink3` | #8A877F | section labels, meta |
-| `GB.hairline` | #D9D4C8 | separators |
-| `GB.hairlineStrong` | #141414 | the heavy rule under a page title |
-| `GB.red` | #C8371F | stamps, debt, negative amounts |
-| `GB.redSoft` | red 10% | stamp fill when done |
-| `GB.green` | #2E6B3A | credit, positive amounts, "quitt" badge |
-| `GB.greenSoft` | green 10% | |
-| `GB.track` | #E3DFD4 | progress track |
-| `GB.chipOn` | #141414 | selected member chip |
-| `GB.chipOff` | #FAF8F3 + hairline | unselected member chip |
+| Tint | `Color.indigo` (system, adapts) | every interactive element, selection |
+| Positive | `Color.green` (system) | money owed to someone, arrived |
+| Negative | `Color.red` (system) | money someone owes, too much |
+| Pending | `.secondary` | expected, not arrived yet |
 
-Dark theme: paper → #141311, paperRaised → #1B1A17, ink → #F3F0E8, hairline →
-white 10%, red/green lifted by ~10% lightness.
+Red and green never carry meaning alone: amounts are signed (`+` / `−`) and
+statuses are words.
 
 ## Type
 
-| Role | Font | Size |
-|---|---|---|
-| Page title | Instrument Serif, 34pt, italic for the highlighted word | |
-| Group title | Instrument Serif, 30pt | |
-| Hero amount | IBM Plex Mono SemiBold, 40pt, tabular | |
-| Amount in rows | IBM Plex Mono, 15pt, tabular | |
-| Body | Inter, 15pt | |
-| Secondary | Inter, 13pt, `ink2` | |
-| Section label | Inter SemiBold, 11pt, uppercase, tracking 1.2 | |
-| Button | Inter SemiBold, 16pt | |
+System text styles only (Dynamic Type). Money is the one branded voice:
 
-All three fonts are SIL Open Font License. Bundle them in the `Design` package.
+| Role | Style |
+|---|---|
+| Hero amount (your balance, payment amount) | `.largeTitle`, rounded, semibold, monospaced digits |
+| Amount input | `.system(size: 48)` scaled with Dynamic Type via `@ScaledMetric`, rounded, semibold |
+| Amount in rows | `.body`, rounded, monospaced digits |
+| Everything else | SF Pro text styles (`.body`, `.subheadline`, `.footnote`) |
 
-## Components (from the PDF)
+## Signature move: the balance line
 
-- **Page header**: eyebrow (date or group meta) + serif title + heavy rule.
-- **Summary rows**: label left, mono amount right, hairline between.
-- **Group row**: title, progress bar (budget or settlement %), mono amount or
-  green "QUITT" tag, chevron.
-- **Leaderboard row**: rank, avatar initial, name, horizontal bar, mono amount.
-- **Receipt**: jagged edges, serif title, mono meta, line items with member
-  chips (A/L/J), summary rows, "Dein Anteil" hero.
-- **Settle sheet**: hero amount, EPC QR tile, dark CTA pill.
-- **History row**: mono time, verb-first sentence ("Anna hat 84,00 € eingetragen"),
-  amount right; days separated by a section label.
-- **Status tags**: `GBTag` in green ("quitt", "bestätigt"), red ("offen"), ink3 ("erwartet").
-- **Tab bar**: native iOS 26 bar with four tabs (Übersicht, Historie, Konto) and
-  a separate "+" (Eintragen).
-- **Dark CTA pill**: full-width, 56pt, radius 28, `ink` background, paper text.
+Each member's balance is drawn as a bar diverging from a shared center axis:
+owed-to to the right in green, owing to the left in red, scaled to the
+largest absolute balance in the group. It appears in Overview's Balances
+section and nowhere else, so "who is where" reads at a glance.
+
+## Components (`Design` package)
+
+- `Amount` – signed, colored, monospaced-digit amount text with an
+  accessibility label that speaks the sign.
+- `MemberAvatar` – circle with the initial, tint fill for you, secondary fill
+  for others.
+- `BalanceBar` – the signature move.
+- `StatusBadge` – small capsule for "invited", "expected", "arrived",
+  "settled", "not synced".
+
+Everything else is a system control: `Button` with `.glassProminent` /
+`.glass` / `.borderedProminent` styles, `Picker`, `DatePicker`, `TextField`,
+`Menu`, `ProgressView`, `ContentUnavailableView`, swipe actions, context menus.
 
 ## Copy voice
 
-Two languages, German and English, via String Catalogs. Short, verbs over
-nouns.
+English and German (String Catalogs), short, verbs over nouns.
 
 | Concept | German | English |
 |---|---|---|
 | tone | informal "du" | plain, second person |
 | actions | Eintragen, Begleichen, Bestätigen | Add, Settle up, Confirm |
-| forms | Eingang, Ausgabe, Begleichen | Income, Expense, Settle up |
-| in side / out side | erhalten von / gehört | received by / belongs to |
+| kinds | Eingang, Ausgabe, Begleichen | Income, Expense, Settle up |
+| sides | Wer bekommt das Geld? / Wem gehört es? | Who gets the money? / Whom does it belong to? |
 | arrival | angekommen, erwartet | arrived, expected |
-| status | quitt, offen, erhalten, beglichen | settled, open, received, paid |
+| status | quitt, offen | settled, open |
