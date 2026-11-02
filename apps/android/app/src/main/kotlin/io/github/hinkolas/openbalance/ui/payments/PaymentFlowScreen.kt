@@ -50,7 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -62,6 +61,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.hinkolas.openbalance.R
+import io.github.hinkolas.openbalance.core.AmountTyping
 import io.github.hinkolas.openbalance.core.EventData
 import io.github.hinkolas.openbalance.core.MemberId
 import io.github.hinkolas.openbalance.core.Money
@@ -179,7 +179,6 @@ private fun AmountStep(ui: GroupUi, draft: PaymentDraft, padding: PaddingValues,
     val focus = remember { FocusRequester() }
     var amount by remember { mutableStateOf(TextFieldValue(draft.amount, TextRange(draft.amount.length))) }
     var pickingDate by remember { mutableStateOf(false) }
-    var amountFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = ListBottomPadding) {
         item(key = "amount") {
@@ -190,18 +189,9 @@ private fun AmountStep(ui: GroupUi, draft: PaymentDraft, padding: PaddingValues,
                         amount = it
                         update(draft.copy(amount = it.text))
                     },
+                    ui.state.currency,
                     ui.currencySymbol,
-                    Modifier.focusRequester(focus).onFocusChanged { state ->
-                        // Tidy the amount once you leave the field: 90000 → 90.000,00.
-                        if (amountFocused && !state.isFocused) {
-                            draft.amountMinor(ui.state)?.let {
-                                val text = Money.bare(it, ui.state.currency)
-                                amount = TextFieldValue(text, TextRange(text.length))
-                                update(draft.copy(amount = text))
-                            }
-                        }
-                        amountFocused = state.isFocused
-                    },
+                    Modifier.focusRequester(focus),
                     onDone = { focusManager.moveFocus(FocusDirection.Down) },
                 )
                 Text(
@@ -357,8 +347,10 @@ private fun MemberField(
 ) {
     val field = form.field(m, currency)
     val preview = resolution.preview[m]
-    var focused by remember { mutableStateOf(false) }
     val text = form.text[m] ?: ""
+    // Keeps the cursor while the text is regrouped; follows the form when it changes elsewhere (rest chosen).
+    var edit by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
+    val shown = if (edit.text == text) edit else TextFieldValue(text, TextRange(text.length))
     val placeholder = if ((resolution.usedFallback || resolution.restMember == m) && preview != null && preview > 0) Money.bare(preview, currency) else "0"
     ListItem(
         colors = listItemColors(),
@@ -372,10 +364,14 @@ private fun MemberField(
         },
         trailingContent = {
             OutlinedTextField(
-                value = text,
-                onValueChange = { v ->
-                    val clearsRest = form.rest == m && v.isNotBlank()
-                    onChange(form.copy(text = form.text + (m to v), rest = if (clearsRest) null else form.rest))
+                value = shown,
+                onValueChange = { raw ->
+                    // Amounts group as you type; percentages ("15%") stay as typed.
+                    val v = AmountTyping.next(shown.text, raw.text, raw.selection.start, currency)
+                        ?.let { TextFieldValue(it.text, TextRange(it.cursor)) } ?: raw
+                    edit = v
+                    val clearsRest = form.rest == m && v.text.isNotBlank()
+                    onChange(form.copy(text = form.text + (m to v.text), rest = if (clearsRest) null else form.rest))
                 },
                 placeholder = { Text(placeholder, style = AmountType.row, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) },
                 textStyle = AmountType.row.copy(textAlign = TextAlign.End),
@@ -383,14 +379,7 @@ private fun MemberField(
                 isError = field == SplitForm.Field.Invalid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false, imeAction = if (last) ImeAction.Done else ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { next() }, onDone = { next() }),
-                modifier = Modifier.widthIn(max = 150.dp).onFocusChanged { state ->
-                    // Tidy an amount once you leave its field: 90000 → 90.000,00.
-                    if (focused && !state.isFocused) {
-                        val f = form.field(m, currency)
-                        if (f is SplitForm.Field.Amount) onChange(form.copy(text = form.text + (m to Money.bare(f.value, currency))))
-                    }
-                    focused = state.isFocused
-                },
+                modifier = Modifier.widthIn(max = 150.dp),
             )
         },
     )

@@ -76,3 +76,68 @@ class SplitFormTests {
         assertEquals(SplitForm.Field.Invalid, SplitForm.parse("120%", "EUR"))
     }
 }
+
+class AmountTypingTests {
+    private val de = Locale.GERMANY
+    private val en = Locale.US
+
+    /** Type [keys] one by one at the end, like a user would. */
+    private fun type(keys: String, locale: Locale, currency: String = "EUR"): String {
+        var text = ""
+        for (k in keys) {
+            val r = if (k == '<') {
+                AmountTyping.next(text, text.dropLast(1), text.length - 1, currency, locale)
+            } else {
+                AmountTyping.next(text, text + k, text.length + 1, currency, locale)
+            }
+            text = r?.text ?: (text + k)
+        }
+        return text
+    }
+
+    @Test
+    fun groupsAsYouType() {
+        assertEquals("130.000", type("130000", de))
+        assertEquals("130,000", type("130000", en))
+        assertEquals(13_000_000L, Money.parse(type("130000", de), "EUR"))
+        assertEquals(13_000_000L, Money.parse(type("130000", en), "EUR"))
+    }
+
+    @Test
+    fun eitherSeparatorStartsTheCents() {
+        assertEquals("1.234,5", type("1234.5", de))
+        assertEquals("1.234,56", type("1234,567", de))
+        assertEquals("1,234.56", type("1234,56", en))
+        assertEquals(123_456L, Money.parse(type("1234.56", de), "EUR"))
+        assertEquals("0,", type(",", de))
+        assertEquals("1.500", type("1.500", de, "JPY").let { type("1500", de, "JPY") })
+    }
+
+    @Test
+    fun deletingWorks() {
+        assertEquals("123", type("1234<", de))
+        assertEquals("12,3", type("12,34<", de))
+        // Backspace over a grouping separator removes the digit before it.
+        val r = AmountTyping.next("1.234", "1234", 1, "EUR", de)!!
+        assertEquals("234", r.text)
+    }
+
+    @Test
+    fun cursorStaysBeforeTheSameDigits() {
+        // "1.234" with the cursor before "234"; typing 9 there gives "19.234" with the cursor before "234".
+        val r = AmountTyping.next("1.234", "19.234", 2, "EUR", de)!!
+        assertEquals("19.234", r.text)
+        assertEquals(3, r.cursor)
+    }
+
+    @Test
+    fun percentagesStayAsTyped() {
+        assertNull(AmountTyping.next("15", "15%", 3, "EUR", de))
+        assertEquals("33,33", type("33,33", de))
+    }
+
+    @Test
+    fun editingAStoredAmountKeepsIt() {
+        assertEquals("130.000,00", AmountTyping.next("130.000,0", "130.000,00", 10, "EUR", de)!!.text)
+    }
+}

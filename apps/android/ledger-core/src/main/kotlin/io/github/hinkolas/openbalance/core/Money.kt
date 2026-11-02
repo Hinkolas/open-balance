@@ -93,3 +93,73 @@ object Money {
         currency
     }
 }
+
+/**
+ * Formats an amount while it is typed, so it never jumps when the field is
+ * left: "130000" shows as "130.000" (German) or "130,000" (English) as the
+ * digits come in. Either "." or "," typed by the user starts the decimals,
+ * since grouping is never typed by hand. Display only; [Money.parse] reads
+ * the result.
+ */
+object AmountTyping {
+    class Result(val text: String, val cursor: Int)
+
+    /**
+     * The field went from [old] to [new] with the cursor at [cursor]. Returns
+     * the formatted text and where the cursor goes, or null to keep [new] as
+     * typed (anything that isn't a plain amount, e.g. "15%").
+     */
+    fun next(old: String, new: String, cursor: Int, currency: String, locale: java.util.Locale = java.util.Locale.getDefault()): Result? {
+        val symbols = java.text.DecimalFormatSymbols.getInstance(locale)
+        val dec = symbols.decimalSeparator
+        val grp = symbols.groupingSeparator
+        val spaces = setOf(' ', ' ', ' ', '\'')
+        if (new.any { !(it in '0'..'9' || it == '.' || it == ',' || it == dec || it == grp || it in spaces) }) return null
+        val exp = Currency.exponent(currency)
+
+        // A pasted amount: let the full parser decide.
+        if (kotlin.math.abs(new.length - old.length) > 1) {
+            val minor = Money.parse(new, currency) ?: return null
+            val text = Money.bare(minor, currency, locale).let { if (exp > 0 && it.endsWith(dec + "0".repeat(exp))) it.dropLast(exp + 1) else it }
+            return Result(text, text.length)
+        }
+
+        var src = new
+        var at = cursor.coerceIn(0, new.length)
+        // Deleting a grouping separator deletes the digit before it.
+        if (new.length == old.length - 1 && at < old.length && old[at] == grp && old.removeRange(at, at + 1) == new && at > 0) {
+            src = new.removeRange(at - 1, at)
+            at -= 1
+        }
+        // A typed "." or "," is the decimal separator.
+        var decimalAt: Int? = null
+        if (new.length == old.length + 1 && at in 1..new.length) {
+            val c = new[at - 1]
+            if ((c == '.' || c == ',') && new.removeRange(at - 1, at) == old) {
+                if (old.contains(dec) || exp == 0) return Result(old, (at - 1).coerceAtMost(old.length))
+                decimalAt = at - 1
+            }
+        }
+        if (decimalAt == null && src.contains(dec)) decimalAt = src.indexOf(dec)
+
+        // Digits right of the cursor stay right of it.
+        val digitsAfter = src.substring(at.coerceAtMost(src.length)).count { it in '0'..'9' }
+        val decAfter = decimalAt != null && decimalAt >= at
+        val whole = (if (decimalAt != null) src.substring(0, decimalAt) else src).filter { it in '0'..'9' }
+        val frac = if (decimalAt != null) src.substring(decimalAt + 1).filter { it in '0'..'9' }.take(exp) else ""
+        val wholeDigits = whole.trimStart('0').ifEmpty { if (whole.isNotEmpty() || decimalAt != null) "0" else "" }.take(15 - exp)
+        val grouped = wholeDigits.reversed().chunked(3).joinToString(grp.toString()).reversed()
+        val text = grouped + if (decimalAt != null) dec + frac else ""
+
+        // Walk back from the end past the digits that were right of the cursor;
+        // if the decimal separator was right of it too, stay left of that.
+        var pos = text.length
+        var seen = 0
+        while (pos > 0 && seen < digitsAfter) {
+            pos -= 1
+            if (text[pos] in '0'..'9') seen += 1
+        }
+        if (decAfter) pos = minOf(pos, text.indexOf(dec).takeIf { it >= 0 } ?: pos)
+        return Result(text, pos)
+    }
+}

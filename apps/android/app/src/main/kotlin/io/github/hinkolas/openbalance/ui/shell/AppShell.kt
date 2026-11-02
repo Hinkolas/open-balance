@@ -140,7 +140,6 @@ fun TabScaffold(
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(title = title, actions = { actions() }, scrollBehavior = scroll)
         },
@@ -161,7 +160,14 @@ fun TabScaffold(
             },
             modifier = Modifier.padding(padding),
         ) {
-            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = ListBottomPadding, content = content)
+            // The app bar sees the scroll before pull to refresh does, so scrolling
+            // back to the top expands it again instead of starting a refresh.
+            LazyColumn(
+                Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
+                state = listState,
+                contentPadding = ListBottomPadding,
+                content = content,
+            )
         }
     }
 }

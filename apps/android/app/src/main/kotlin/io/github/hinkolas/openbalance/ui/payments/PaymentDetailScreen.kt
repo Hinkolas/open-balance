@@ -2,6 +2,13 @@ package io.github.hinkolas.openbalance.ui.payments
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import io.github.hinkolas.openbalance.core.AmountTyping
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -278,7 +285,7 @@ fun ArrivalSheet(ui: GroupUi, target: ArrivalTarget, onDismiss: () -> Unit) {
                 if (target.member == ui.me) stringResource(R.string.what_arrived) else stringResource(R.string.arrived_at, ui.name(target.member)),
                 style = MaterialTheme.typography.titleLarge,
             )
-            AmountField(amount, { amount = it }, ui.currencySymbol, Modifier.focusRequester(focus), imeAction = ImeAction.Done, onDone = ::save)
+            AmountField(amount, { amount = it }, ui.state.currency, ui.currencySymbol, Modifier.focusRequester(focus), imeAction = ImeAction.Done, onDone = ::save)
             Text(
                 stringResource(R.string.still_expected_footer, ui.money(target.remaining)),
                 style = MaterialTheme.typography.bodyMedium,
@@ -294,35 +301,56 @@ fun ArrivalSheet(ui: GroupUi, target: ArrivalTarget, onDismiss: () -> Unit) {
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
-/** The big amount input: tabular figures, centered, the currency symbol after it. */
+/**
+ * The big amount input: tabular figures, centered, the currency symbol after
+ * it. Groups thousands as you type ("130.000"), and the text shrinks to fit
+ * instead of scrolling when the number gets long.
+ */
 @Composable
 fun AmountField(
     value: TextFieldValue,
     onChange: (TextFieldValue) -> Unit,
+    currency: String,
     symbol: String,
     modifier: Modifier = Modifier,
     imeAction: ImeAction = ImeAction.Next,
     onDone: () -> Unit = {},
 ) {
-    val style = AmountType.input.copy(color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.foundation.text.BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            textStyle = style,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = imeAction),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }, onNext = { onDone() }),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(Brand.tint),
-            modifier = modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Min),
-            decorationBox = { inner ->
-                Box(contentAlignment = Alignment.Center) {
-                    if (value.text.isEmpty()) Text("0", style = style.copy(color = MaterialTheme.colorScheme.outline))
-                    inner()
-                }
-            },
-        )
-        Spacer(Modifier.padding(start = 6.dp))
-        Text(symbol, style = AmountType.input.copy(fontSize = AmountType.input.fontSize * 0.55f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val base = AmountType.input.copy(color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+    val symbolStyle = base.copy(fontSize = base.fontSize * 0.55f, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val gap = with(density) { 8.dp.roundToPx() }
+        val cursor = with(density) { 4.dp.roundToPx() }
+        val shown = value.text.ifEmpty { "0" }
+        val room = constraints.maxWidth - measurer.measure(symbol, symbolStyle).size.width - gap - cursor
+        val natural = measurer.measure(shown, base).size.width
+        val scale = if (natural > room && natural > 0) room.toFloat() / natural else 1f
+        val style = base.copy(fontSize = base.fontSize * scale)
+        val width = with(density) { (measurer.measure(shown, style).size.width + cursor).toDp() }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = value,
+                onValueChange = { v ->
+                    val typed = AmountTyping.next(value.text, v.text, v.selection.start, currency) ?: return@BasicTextField
+                    onChange(TextFieldValue(typed.text, TextRange(typed.cursor)))
+                },
+                textStyle = style,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = imeAction),
+                keyboardActions = KeyboardActions(onDone = { onDone() }, onNext = { onDone() }),
+                cursorBrush = SolidColor(Brand.tint),
+                modifier = modifier.width(width),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.Center) {
+                        if (value.text.isEmpty()) Text("0", style = style.copy(color = MaterialTheme.colorScheme.outline))
+                        inner()
+                    }
+                },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(symbol, style = symbolStyle)
+        }
     }
 }
