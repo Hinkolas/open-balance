@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand emerald (docs/DESIGN.md), matching the app icon. -->
+    <color name="window_background">#FFF5FBF4</color>
+    <color name="icon_gradient_top">#FF33B875</color>
+    <color name="icon_gradient_bottom">#FF0D7A4D</color>
+</resources>

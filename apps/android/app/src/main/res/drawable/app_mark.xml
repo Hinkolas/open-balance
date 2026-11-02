@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon as one image for the welcome screen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp" android:height="96dp"
+    android:viewportWidth="1024" android:viewportHeight="1024">
+    <path android:pathData="M230,0 H794 A230,230 0 0 1 1024,230 V794 A230,230 0 0 1 794,1024 H230 A230,230 0 0 1 0,794 V230 A230,230 0 0 1 230,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="512" android:startY="0" android:endX="512" android:endY="1024"
+                android:startColor="@color/icon_gradient_top" android:endColor="@color/icon_gradient_bottom" />
+        </aapt:attr>
+    </path>
+        <path android:pathData="M377,427 H507 A200,200 0 0 1 507,827 H377 Q337,827 337,787 V467 Q337,427 377,427 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="512" android:startY="205" android:endX="512" android:endY="819"
+                    android:startColor="#ADFFFFFF" android:endColor="#86DBFFED" />
+            </aapt:attr>
+        </path>
+        <path android:pathData="M377,197 H507 A200,200 0 0 1 507,597 H377 Q337,597 337,557 V237 Q337,197 377,197 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="512" android:startY="205" android:endX="512" android:endY="819"
+                    android:startColor="#ADFFFFFF" android:endColor="#86DBFFED" />
+            </aapt:attr>
+        </path>
+</vector>
