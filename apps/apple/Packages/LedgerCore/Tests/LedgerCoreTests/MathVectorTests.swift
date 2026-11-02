@@ -22,7 +22,7 @@ struct BalancesFile: Decodable {
     struct Expect: Decodable {
         var balances: [String: Int]; var pendingOwned: [String: Int]; var pendingHeld: [String: Int]
         var transfers: [TransfersFile.T]
-        var expected: [String: Int]; var expectedTransfers: [TransfersFile.T]
+        var expected: [String: Int]; var expectedTransfers: [TransfersFile.T]; var payNow: [TransfersFile.T]
     }
     struct Case: Decodable { var name: String; var members: [String]; var payments: [P]; var expect: Expect }
     var cases: [Case]
@@ -61,6 +61,7 @@ struct BalancesFile: Decodable {
         #expect(s.transfers == c.expect.transfers.map { .init(from: $0.from, to: $0.to, amount: $0.amount) }, "\(c.name)")
         #expect(s.expected == c.expect.expected, "\(c.name)")
         #expect(s.expectedTransfers == c.expect.expectedTransfers.map { .init(from: $0.from, to: $0.to, amount: $0.amount) }, "\(c.name)")
+        #expect(s.payNow == c.expect.payNow.map { .init(from: $0.from, to: $0.to, amount: $0.amount) }, "\(c.name)")
     }
 }
 

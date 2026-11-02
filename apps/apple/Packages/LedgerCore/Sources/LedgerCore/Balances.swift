@@ -55,10 +55,15 @@ public enum Balances {
         public var transfers: [Transfer] = []
         /// §9.4: the balance once every tracked payment has fully arrived.
         public var expected: [MemberID: Int] = [:]
-        /// §9.4: who pays whom once everything has arrived.
+        /// §9.4: who pays whom once everything has arrived. The plan to settle by.
         public var expectedTransfers: [Transfer] = []
-        /// Whether money still on its way changes who pays whom.
-        public var expectedDiffers: Bool { expectedTransfers != transfers }
+        /// §9.5: the part of each expected transfer that can be paid today.
+        public var payNow: [Transfer] = []
+
+        /// What `from` can pay `to` today out of their expected transfer.
+        public func payableNow(from: MemberID, to: MemberID) -> Int {
+            payNow.first { $0.from == from && $0.to == to }?.amount ?? 0
+        }
     }
 
     public struct Transfer: Sendable, Equatable, Hashable {
@@ -75,6 +80,9 @@ public enum Balances {
     /// Payments must already be valid; `arrivals` are the live arrivals per payment.
     public static func summarize(members: [MemberID], payments: [Payment], arrivals: [PaymentID: [Arrival]]) -> Summary {
         var s = Summary()
+        // §9.5: per member, the sum of each payment's pending effect that
+        // raises (up) or lowers (down) their balance once it arrives.
+        var up: [MemberID: Int] = [:], down: [MemberID: Int] = [:]
         for m in members {
             s.balances[m] = 0
             s.pendingOwned[m] = 0
@@ -82,15 +90,21 @@ public enum Balances {
         }
         for p in payments {
             let e = effect(of: p, arrivals: arrivals[p.id] ?? [])
+            var pending: [MemberID: Int] = [:]
             for line in p.out.lines {
                 let owned = e.owned[line.member] ?? 0
                 s.balances[line.member, default: 0] += owned
                 s.pendingOwned[line.member, default: 0] += line.amount - owned
+                pending[line.member, default: 0] += line.amount - owned
             }
             for line in p.in.lines {
                 let held = e.held[line.member] ?? 0
                 s.balances[line.member, default: 0] -= held
                 s.pendingHeld[line.member, default: 0] += line.amount - held
+                pending[line.member, default: 0] -= line.amount - held
+            }
+            for (m, d) in pending {
+                if d > 0 { up[m, default: 0] += d } else { down[m, default: 0] += d }
             }
         }
         s.transfers = transfers(s.balances)
@@ -98,7 +112,28 @@ public enum Balances {
             s.expected[m] = b + (s.pendingOwned[m] ?? 0) - (s.pendingHeld[m] ?? 0)
         }
         s.expectedTransfers = transfers(s.expected)
+        var owes: [MemberID: Int] = [:], owed: [MemberID: Int] = [:]
+        for (m, b) in s.balances {
+            owes[m] = max(0, -(b + (up[m] ?? 0)))
+            owed[m] = max(0, b + (down[m] ?? 0))
+        }
+        s.payNow = payNow(owes: owes, owed: owed, plan: s.expectedTransfers)
         return s
+    }
+
+    /// Pay now (§9.5): each planned transfer, capped by the least the payer
+    /// can end up owing and the receiver can end up being owed.
+    static func payNow(owes: [MemberID: Int], owed: [MemberID: Int], plan: [Transfer]) -> [Transfer] {
+        var owes = owes, owed = owed
+        var out: [Transfer] = []
+        for t in plan {
+            let now = min(t.amount, owes[t.from] ?? 0, owed[t.to] ?? 0)
+            guard now > 0 else { continue }
+            owes[t.from]! -= now
+            owed[t.to]! -= now
+            out.append(Transfer(from: t.from, to: t.to, amount: now))
+        }
+        return out
     }
 
     /// Who pays whom (§9.3): largest debtor pays largest creditor, ties by id.

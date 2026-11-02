@@ -28,13 +28,15 @@ both first-class and follow the system.
   money arrives), money waiting for arrival, balances, and the 5 latest
   payments with a `Show all` row (badge = count) that pushes the full,
   searchable list. Who pays whom is not on it.
-- **Settle up** is its own tab, not inline buttons. A segmented
-  `Arrived | Expected` picker in the navigation bar switches between what is
-  owed now and the plan once everything arrives (PROTOCOL.md §9.4). Arrived
-  warns when pending money would change the plan; Expected is marked "not
-  owed yet". Your payments carry a trailing capsule `Settle up` button
-  (`.bordered`, `.capsule`), App Store style; a recorded but unconfirmed
-  settlement replaces the button with "recorded, waiting for confirmation".
+- **Settle up** is its own tab with one plan: who pays whom once every
+  pending payment has arrived (PROTOCOL.md §9.4), so nothing is paid that a
+  pending payment would send back. Each transfer shows what is due now
+  (§9.5): nothing extra when all of it can be paid, "X now, Y once the money
+  arrives", or "once the money on its way arrives". Your payments carry a
+  trailing capsule `Pay X` button (`.bordered`, `.capsule`) for the amount
+  due now; a recorded but unconfirmed settlement shows "sent, waiting for
+  confirmation". A notice at the top explains when the plan counts money
+  still on its way; the pending payments are listed under Still expected.
 - **Multi-step tasks** push steps in the sheet's `NavigationStack`: the back
   button and swipe-back work, the trailing button says `Next` until the last
   step, which says `Save`.

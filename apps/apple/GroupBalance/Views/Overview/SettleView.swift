@@ -3,67 +3,78 @@ import LedgerCore
 import LedgerSync
 import SwiftUI
 
-/// The Settle up tab: who pays whom with the money that has arrived, or with
-/// everything that is still expected (PROTOCOL.md §9.4), so nobody settles
-/// just before a pending payment turns the plan around.
+/// The Settle up tab: one plan, who pays whom once everything has arrived
+/// (PROTOCOL.md §9.4), and for each transfer how much of it can be paid today
+/// (§9.5). Nobody pays money they don't owe yet, and no money moves one way
+/// that a pending payment would send back.
 struct SettleView: View {
     let session: GroupSession
-    @State private var basis: Basis = .arrived
     @State private var draft: PaymentDraft?
 
-    enum Basis: Hashable { case arrived, expected }
     private enum Group { case pay, get, others }
 
     var body: some View {
         let state = session.state
         let summary = state.summary
-        let expecting = basis == .expected
-        let plan = expecting ? summary.expectedTransfers : summary.transfers
-        let youPay = plan.filter { $0.from == session.me }
-        let youGet = plan.filter { $0.to == session.me }
-        let others = plan.filter { $0.from != session.me && $0.to != session.me }
+        let plan = summary.expectedTransfers
         let waiting = Waiting.items(in: state)
         let stillExpected = waiting.reduce(0) { $0 + $1.open }
-        let recorded = recordedSettlements(waiting)
+        let sent = settlementsOnTheWay(waiting, from: true)
+        let incoming = settlementsOnTheWay(waiting, from: false)
+        let youPay = rows(plan.filter { $0.from == session.me }.map(\.to), extra: sent.keys)
+        let youGet = rows(plan.filter { $0.to == session.me }.map(\.from), extra: incoming.keys)
+        let others = plan.filter { $0.from != session.me && $0.to != session.me }
+        let waitsForMoney = summary.payNow != plan
         // The plan's closing note goes under whichever plan section comes last.
         let last: Group? = !others.isEmpty ? .others : !youGet.isEmpty ? .get : !youPay.isEmpty ? .pay : nil
 
         List {
-            notice(expecting: expecting, differs: summary.expectedDiffers, stillExpected: stillExpected)
-
-            if plan.isEmpty {
+            if waitsForMoney, stillExpected > 0 {
+                Section { notice(stillExpected) }
+            }
+            if plan.isEmpty, sent.isEmpty, incoming.isEmpty {
                 Section {
-                    Label(expecting ? String(localized: "Everyone will be settled.") : String(localized: "Everyone is settled."),
+                    Label(summary.transfers.isEmpty
+                          ? String(localized: "Everyone is settled.")
+                          : String(localized: "Everyone is settled once the money on its way arrives."),
                           systemImage: "checkmark.circle.fill")
                         .foregroundStyle(Theme.positive)
                 }
             }
             if !youPay.isEmpty {
                 Section {
-                    ForEach(youPay, id: \.self) { t in
-                        payRow(t, recorded: expecting ? 0 : recorded[t.to] ?? 0, expecting: expecting)
+                    ForEach(youPay, id: \.self) { to in
+                        planRow(with: to, total: amount(plan, from: session.me, to: to),
+                                now: summary.payableNow(from: session.me, to: to),
+                                onTheWay: sent[to] ?? 0, paying: true)
                     }
                 } header: {
                     Text("You pay")
                 } footer: {
-                    planFooter(expecting ? nil : String(localized: "Settling records a payment. It counts once the receiver confirms it arrived."), last: last == .pay)
+                    planFooter(String(localized: "Settling records a payment. It counts once the receiver confirms it arrived."), last: last == .pay)
                 }
             }
             if !youGet.isEmpty {
                 Section {
-                    ForEach(youGet, id: \.self) { t in
-                        memberRow(t.from, amount: t.amount, tone: expecting ? .pending : .positive)
+                    ForEach(youGet, id: \.self) { from in
+                        planRow(with: from, total: amount(plan, from: from, to: session.me),
+                                now: summary.payableNow(from: from, to: session.me),
+                                onTheWay: incoming[from] ?? 0, paying: false)
                     }
                 } header: {
                     Text("You receive")
                 } footer: {
-                    planFooter(expecting ? nil : String(localized: "When the money is in your account, confirm it under Waiting for arrival."), last: last == .get)
+                    planFooter(String(localized: "When the money is in your account, confirm it under Still expected."), last: last == .get)
                 }
             }
             if !others.isEmpty {
                 Section {
                     ForEach(others, id: \.self) { t in
-                        TransferRow(session: session, transfer: t, tone: expecting ? .pending : .neutral)
+                        VStack(alignment: .leading, spacing: 4) {
+                            TransferRow(session: session, transfer: t, tone: .neutral)
+                            timing(total: t.amount, now: summary.payableNow(from: t.from, to: t.to))
+                        }
+                        .accessibilityElement(children: .combine)
                     }
                 } header: {
                     Text(youPay.isEmpty && youGet.isEmpty ? String(localized: "Who pays whom") : String(localized: "Between others"))
@@ -72,125 +83,126 @@ struct SettleView: View {
                 }
             }
             if !waiting.isEmpty {
-                Section {
+                Section("Still expected") {
                     ForEach(waiting) { item in
                         NavigationLink(value: PaymentRoute(id: item.record.id)) {
                             WaitingRow(session: session, item: item)
                         }
                     }
-                } header: {
-                    Text("Still expected")
-                } footer: {
-                    Text("Who pays whom changes as this money arrives.")
                 }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Settle up")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Plan", selection: $basis) {
-                    Text("Arrived").tag(Basis.arrived)
-                    Text("Expected").tag(Basis.expected)
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
-            AddPaymentMenu(session: session, draft: $draft)
-        }
+        .toolbar { AddPaymentMenu(session: session, draft: $draft) }
         .refreshable { try? await session.syncNow() }
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
     }
 
+    // MARK: Rows
+
+    /// One person you pay or get money from: the planned amount, the settle
+    /// button for what you can pay now, and below it when the rest is due.
+    private func planRow(with member: MemberID, total: Int, now: Int, onTheWay: Int, paying: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                MemberAvatar(session.state.members[member]?.initial ?? "?")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.name(member)).lineLimit(1)
+                    Amount(session.money(total > 0 ? total : onTheWay),
+                           tone: total == 0 ? .pending : paying ? .negative : .positive,
+                           font: .amount(.body, weight: .semibold))
+                }
+                Spacer(minLength: 8)
+                if paying, now > 0 {
+                    Button(String(localized: "Pay \(session.money(now))")) {
+                        draft = .settle(.init(from: session.me, to: member, amount: now), session: session)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .fontWeight(.semibold)
+                    .fixedSize()
+                    .accessibilityLabel(Text("Pay \(session.money(now)) to \(session.name(member))"))
+                }
+            }
+            if total > 0 { timing(total: total, now: now) }
+            if onTheWay > 0 {
+                caption(paying
+                        ? String(localized: "\(session.money(onTheWay)) sent, waiting for confirmation")
+                        : String(localized: "\(session.money(onTheWay)) on the way to you"),
+                        symbol: "paperplane")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// When a planned transfer can happen: nothing when all of it can be paid
+    /// today, otherwise what is due now and what waits for money on its way.
+    @ViewBuilder private func timing(total: Int, now: Int) -> some View {
+        if now == 0 {
+            caption(String(localized: "Once the money on its way arrives"), symbol: "clock")
+        } else if now < total {
+            caption(String(localized: "\(session.money(now)) now, \(session.money(total - now)) once the money arrives"), symbol: "clock")
+        }
+    }
+
+    private func caption(_ text: String, symbol: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: symbol).imageScale(.small)
+            Text(text)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+
+    // MARK: Sections
+
+    private func notice(_ stillExpected: Int) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Planned with money on its way").font(.headline)
+                Text("It includes the \(session.money(stillExpected)) still expected. Pay what is due now and the rest once it arrives.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: "hourglass").foregroundStyle(Theme.tint)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder private func planFooter(_ note: String?, last: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             if let note { Text(note) }
-            if last { Text("The fewest transfers that settle everyone, netted through the group.") }
+            if last { Text("The fewest transfers that settle everyone once all money has arrived.") }
         }
     }
 
-    /// Why this plan may not be the one to act on.
-    @ViewBuilder private func notice(expecting: Bool, differs: Bool, stillExpected: Int) -> some View {
-        if expecting {
-            Section {
-                noticeLabel(
-                    title: String(localized: "Not owed yet"),
-                    detail: stillExpected > 0
-                        ? String(localized: "This plan assumes the \(session.money(stillExpected)) still expected arrives. Settle once it has.")
-                        : String(localized: "Nothing is on its way, so this is the same as what is owed now."),
-                    symbol: "clock")
-            }
-        } else if differs {
-            Section {
-                noticeLabel(
-                    title: String(localized: "Money is still on its way"),
-                    detail: String(localized: "Once the \(session.money(stillExpected)) still expected arrives, who pays whom changes. Check Expected before you settle."),
-                    symbol: "hourglass")
-            }
-        }
+    // MARK: Data
+
+    private func amount(_ plan: [Balances.Transfer], from: MemberID, to: MemberID) -> Int {
+        plan.first { $0.from == from && $0.to == to }?.amount ?? 0
     }
 
-    private func noticeLabel(title: String, detail: String, symbol: String) -> some View {
-        Label {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        } icon: {
-            Image(systemName: symbol).foregroundStyle(Theme.tint)
-        }
-        .accessibilityElement(children: .combine)
+    /// Members from the plan in plan order, then anyone with a settlement on
+    /// the way who is no longer in the plan.
+    private func rows(_ planned: [MemberID], extra: Dictionary<MemberID, Int>.Keys) -> [MemberID] {
+        planned + session.state.memberOrder.filter { extra.contains($0) && !planned.contains($0) }
     }
 
-    /// One person you pay: who, how much, and the settle button while
-    /// something is still left to pay.
-    private func payRow(_ t: Balances.Transfer, recorded: Int, expecting: Bool) -> some View {
-        let left = t.amount - recorded
-        return HStack(spacing: 12) {
-            MemberAvatar(session.state.members[t.to]?.initial ?? "?")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.name(t.to)).lineLimit(1)
-                Amount(session.money(t.amount), tone: expecting ? .pending : .negative, font: .amount(.body, weight: .semibold))
-                if recorded > 0 {
-                    Text("\(session.money(recorded)) recorded, waiting for confirmation")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 8)
-            if !expecting, left > 0 {
-                Button("Settle up") {
-                    draft = .settle(.init(from: t.from, to: t.to, amount: left), session: session)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .fontWeight(.semibold)
-                .accessibilityLabel(Text("Settle up with \(session.name(t.to))"))
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func memberRow(_ member: MemberID, amount: Int, tone: AmountTone) -> some View {
-        HStack(spacing: 12) {
-            MemberAvatar(session.state.members[member]?.initial ?? "?")
-            Text(session.name(member)).lineLimit(1)
-            Spacer(minLength: 8)
-            Amount(session.money(amount), tone: tone)
-        }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Settle-up payments from you that the receiver hasn't confirmed yet,
-    /// per receiver, so the same debt isn't paid twice.
-    private func recordedSettlements(_ waiting: [Waiting]) -> [MemberID: Int] {
+    /// Settle-up payments not confirmed yet, per counterpart: yours to others
+    /// (`from: true`) or others' to you. They already count in the plan, so
+    /// the same debt isn't paid twice.
+    private func settlementsOnTheWay(_ waiting: [Waiting], from: Bool) -> [MemberID: Int] {
         var out: [MemberID: Int] = [:]
-        for item in waiting where item.record.payment.displayKind == .settlement
-            && item.record.payment.out.lines.contains(where: { $0.member == session.me && $0.amount > 0 }) {
-            out[item.line.member, default: 0] += item.open
+        for item in waiting where item.record.payment.displayKind == .settlement {
+            let payer = item.record.payment.out.lines.first { $0.amount > 0 }?.member
+            if from, payer == session.me {
+                out[item.line.member, default: 0] += item.open
+            } else if !from, item.line.member == session.me, let payer {
+                out[payer, default: 0] += item.open
+            }
         }
         return out
     }

@@ -72,9 +72,10 @@ across replicas.
 
 ## iOS app
 
-Tabs as in Quitt: **Overview** (your balance, who pays whom, expected
-arrivals), **History** (the ledger timeline), **Account** (groups, servers,
-members), and a separate **+**.
+Tabs: **Overview** (your balance, expected arrivals, balances, payments),
+**Settle up** (who pays whom once everything arrives, and what can be paid
+now), **History** (the ledger timeline), **Group** (members, devices,
+servers), and a separate **+**.
 
 - **+**: Income, Expense, Settle up. Each form asks only what it needs and
   writes the same payment event; an "Advanced" toggle shows both splits.

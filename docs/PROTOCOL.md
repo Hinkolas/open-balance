@@ -524,9 +524,36 @@ expected[m]       = balance[m] + pendingOwned[m] − pendingHeld[m]
 expectedTransfers = transfers(expected)
 ```
 
-`expected` sums to zero like `balance`. Clients show it next to the arrived
-numbers so members can see whether money still on its way changes who pays
-whom before they settle. Only `balance` and `transfers` are what is owed now.
+`expected` sums to zero like `balance`. `expectedTransfers` is the plan
+members settle by: settling by `transfers` alone can send money one way that a
+pending payment later sends back.
+
+### 9.5 Pay now
+
+How much of each expected transfer can be paid today without depending on
+money still on its way: nobody pays money they don't owe yet, and nothing paid
+now has to come back, whichever pending payments arrive.
+
+Per payment `p`, its still pending effect on member `m` is
+`d_p[m] = (out_m − owned_m) − (in_m − held_m)` (its part of
+`pendingOwned − pendingHeld`, §9.2). Assuming each pending payment either
+arrives in full or not at all:
+
+```
+owes[m] = max(0, −(balance[m] + Σ_p max(0, d_p[m])))   least m can end up owing
+owed[m] = max(0,   balance[m] + Σ_p min(0, d_p[m]))    least m can end up owed
+for t in expectedTransfers, in order:
+    now = min(t.amount, owes[t.from], owed[t.to])
+    owes[t.from] −= now
+    owed[t.to]   −= now
+payNow = the (t.from, t.to, now) with now > 0, in the same order
+```
+
+The rest of a transfer (`t.amount − now`) is paid once the money it depends
+on has arrived. A settle up that is recorded but not confirmed is a pending
+payment like any other, so it is not suggested again. `payNow` is
+conservative: it may suggest less than is possible when one member appears in
+several transfers.
 
 ## 10. Versioning
 
