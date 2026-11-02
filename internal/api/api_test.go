@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -85,10 +86,17 @@ func pubB64(k ed25519.PrivateKey) string {
 	return protocol.B64.EncodeToString(k.Public().(ed25519.PublicKey))
 }
 
+// keyring is an opaque sealed keyring; the server never reads it.
+func keyring() string {
+	b := make([]byte, 32+16+64)
+	rand.Read(b)
+	return protocol.B64.EncodeToString(b)
+}
+
 func blob(n byte) string {
-	b := make([]byte, 1+12+16+256)
+	b := make([]byte, protocol.BlobHeader+16+256)
 	b[0] = protocol.BlobVersion
-	b[20] = n
+	b[24] = n
 	return protocol.B64.EncodeToString(b)
 }
 
@@ -106,11 +114,11 @@ func TestGroupLifecycle(t *testing.T) {
 	}
 
 	// Only the server owner creates groups.
-	st, _ := c.do("POST", "/v1/groups", nil, false, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
+	st, _ := c.do("POST", "/v1/groups", nil, false, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()})
 	expect("create without owner token", st, 401)
-	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()})
 	expect("create", st, 201)
-	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()})
 	expect("create twice", st, 409)
 
 	// Admin appends; strangers can't read.
@@ -129,7 +137,7 @@ func TestGroupLifecycle(t *testing.T) {
 	expect("stranger reads", st, 403)
 
 	// Invite, claim, member writes.
-	st, _ = c.do("POST", g+"/invites", admin, false, map[string]any{"inviteKey": pubB64(invite)})
+	st, _ = c.do("POST", g+"/invites", admin, false, map[string]any{"inviteKey": pubB64(invite), "keyring": keyring()})
 	expect("invite", st, 201)
 	st, _ = c.do("POST", g+"/events", invite, false, map[string]any{"events": []any{map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(2)}}})
 	expect("invite key appends", st, 403)
@@ -193,7 +201,7 @@ func TestDeviceInvites(t *testing.T) {
 	invite := func(by ed25519.PrivateKey, role string) (ed25519.PrivateKey, int) {
 		t.Helper()
 		k := newKey()
-		body := map[string]any{"inviteKey": pubB64(k)}
+		body := map[string]any{"inviteKey": pubB64(k), "keyring": keyring()}
 		if role != "" {
 			body["role"] = role
 		}
@@ -219,7 +227,7 @@ func TestDeviceInvites(t *testing.T) {
 		expect(what, st, 200)
 	}
 
-	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
+	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()})
 	expect("create", st, 201)
 	inv, st := invite(admin, "")
 	expect("admin invites", st, 201)
@@ -257,7 +265,7 @@ func TestStreamWakesOnAppend(t *testing.T) {
 	c := client{t, srv}
 	group := uuid.Must(uuid.NewV7())
 	admin := newKey()
-	if st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())}); st != 201 {
+	if st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()}); st != 201 {
 		t.Fatalf("create: %d", st)
 	}
 	path := "/v1/groups/" + group.String() + "/stream"
@@ -348,7 +356,7 @@ func newGroup(t *testing.T, c client) groupFixture {
 	t.Helper()
 	f := groupFixture{c: c, group: uuid.Must(uuid.NewV7()), admin: newKey(), recovery: newKey()}
 	f.g = "/v1/groups/" + f.group.String()
-	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": f.group, "adminKey": pubB64(f.admin), "recoveryKey": pubB64(f.recovery)})
+	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": f.group, "adminKey": pubB64(f.admin), "recoveryKey": pubB64(f.recovery), "recoveryKeyring": keyring()})
 	expectStatus(t, "create", st, 201)
 	return f
 }
@@ -356,7 +364,7 @@ func newGroup(t *testing.T, c client) groupFixture {
 func (f groupFixture) invite(by ed25519.PrivateKey, role string) ed25519.PrivateKey {
 	f.c.t.Helper()
 	k := newKey()
-	body := map[string]any{"inviteKey": pubB64(k)}
+	body := map[string]any{"inviteKey": pubB64(k), "keyring": keyring()}
 	if role != "" {
 		body["role"] = role
 	}
@@ -391,7 +399,7 @@ func TestCreationCodes(t *testing.T) {
 	c := client{t, testServer(t)}
 	create := func(auth string) int {
 		t.Helper()
-		raw, _ := json.Marshal(map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": pubB64(newKey()), "recoveryKey": pubB64(newKey())})
+		raw, _ := json.Marshal(map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": pubB64(newKey()), "recoveryKey": pubB64(newKey()), "recoveryKeyring": keyring()})
 		req, _ := http.NewRequest("POST", c.srv.URL+"/v1/groups", bytes.NewReader(raw))
 		if auth != "" {
 			req.Header.Set("Authorization", "Bearer "+auth)
@@ -441,7 +449,7 @@ func TestCreationCodes(t *testing.T) {
 
 	// The same key can't be admin and recovery key.
 	k := pubB64(newKey())
-	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": k, "recoveryKey": k})
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": k, "recoveryKey": k, "recoveryKeyring": keyring()})
 	expectStatus(t, "admin key as recovery key", st, 400)
 }
 
@@ -516,14 +524,14 @@ func TestRecovery(t *testing.T) {
 
 	// Only the admin replaces the recovery key; the old one stops working.
 	next := newKey()
-	st, _ = f.c.do("PUT", f.g+"/recovery", anna, false, map[string]any{"recoveryKey": pubB64(next)})
+	st, _ = f.c.do("PUT", f.g+"/recovery", anna, false, map[string]any{"recoveryKey": pubB64(next), "keyring": keyring()})
 	expectStatus(t, "removed member replaces recovery key", st, 403)
 	member := f.claim(f.invite(restored, ""))
-	st, _ = f.c.do("PUT", f.g+"/recovery", member, false, map[string]any{"recoveryKey": pubB64(next)})
+	st, _ = f.c.do("PUT", f.g+"/recovery", member, false, map[string]any{"recoveryKey": pubB64(next), "keyring": keyring()})
 	expectStatus(t, "member replaces recovery key", st, 403)
-	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next)})
+	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next), "keyring": keyring()})
 	expectStatus(t, "admin replaces recovery key", st, 204)
-	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next)})
+	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next), "keyring": keyring()})
 	expectStatus(t, "reuse a key", st, 409)
 	_, st = recoverWith(f.recovery)
 	expectStatus(t, "recover with the old key", st, 403)
@@ -531,4 +539,57 @@ func TestRecovery(t *testing.T) {
 	expectStatus(t, "recover with the new key", st, 200)
 	expectStatus(t, "previous restored device reads", f.reads(restored), 403)
 	expectStatus(t, "second restored device reads", f.reads(again), 200)
+}
+
+// Keyrings travel with invites and the recovery key and come back on claim,
+// on recovery and from GET keyring (§5.3).
+func TestKeyrings(t *testing.T) {
+	f := newGroup(t, client{t, testServer(t)})
+	ring := keyring()
+	inv := newKey()
+	st, _ := f.c.do("POST", f.g+"/invites", f.admin, false, map[string]any{"inviteKey": pubB64(inv)})
+	expectStatus(t, "invite without keyring", st, 400)
+	st, _ = f.c.do("POST", f.g+"/invites", f.admin, false, map[string]any{"inviteKey": pubB64(inv), "keyring": "AAAA"})
+	expectStatus(t, "invite with a tiny keyring", st, 400)
+	st, _ = f.c.do("POST", f.g+"/invites", f.admin, false, map[string]any{"inviteKey": pubB64(inv), "keyring": ring})
+	expectStatus(t, "invite", st, 201)
+
+	dev := newKey()
+	proof := ed25519.Sign(dev, protocol.ClaimInput(f.group, inv.Public().(ed25519.PublicKey)))
+	st, out := f.c.do("POST", f.g+"/claim", inv, false, map[string]any{"memberKey": pubB64(dev), "proof": protocol.B64.EncodeToString(proof)})
+	expectStatus(t, "claim", st, 200)
+	if out["keyring"] != ring {
+		t.Fatal("claim returned another keyring")
+	}
+	st, out = f.c.do("GET", f.g+"/keyring", dev, false, nil)
+	expectStatus(t, "keyring again", st, 200)
+	if out["keyring"] != ring {
+		t.Fatal("GET keyring returned another keyring")
+	}
+	st, _ = f.c.do("GET", f.g+"/keyring", f.admin, false, nil)
+	expectStatus(t, "creator has no keyring", st, 404)
+
+	// Recovery hands the recovery key's keyring to the new admin device.
+	next, nextRing := newKey(), keyring()
+	st, _ = f.c.do("PUT", f.g+"/recovery", f.admin, false, map[string]any{"recoveryKey": pubB64(next)})
+	expectStatus(t, "recovery key without keyring", st, 400)
+	st, _ = f.c.do("PUT", f.g+"/recovery", f.admin, false, map[string]any{"recoveryKey": pubB64(next), "keyring": nextRing})
+	expectStatus(t, "replace recovery key", st, 204)
+	restored := newKey()
+	proof = ed25519.Sign(restored, protocol.ClaimInput(f.group, next.Public().(ed25519.PublicKey)))
+	st, out = f.c.do("POST", f.g+"/recover", next, false, map[string]any{"memberKey": pubB64(restored), "proof": protocol.B64.EncodeToString(proof)})
+	expectStatus(t, "recover", st, 200)
+	if out["keyring"] != nextRing {
+		t.Fatal("recover returned another keyring")
+	}
+	st, out = f.c.do("GET", f.g+"/keyring", restored, false, nil)
+	if st != 200 || out["keyring"] != nextRing {
+		t.Fatalf("restored device's keyring: %d", st)
+	}
+
+	// Version 1 blobs are refused.
+	old := make([]byte, protocol.BlobHeader+16+256)
+	old[0] = 0x01
+	st, _ = f.c.do("POST", f.g+"/events", restored, false, map[string]any{"events": []any{map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": protocol.B64.EncodeToString(old)}}})
+	expectStatus(t, "version 1 blob", st, 400)
 }

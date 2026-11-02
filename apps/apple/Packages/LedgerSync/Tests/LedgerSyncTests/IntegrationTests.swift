@@ -130,6 +130,10 @@ func lostDevicesAndRecovery() async throws {
     await #expect(throws: ServerError.self) { try await ben.syncNow() }
     #expect(ben.isRemoved)
     #expect(laptop.state.members[ben.me]?.keys == [laptop.deviceKey])
+    // The laptop started epoch 1 right after removing the phone.
+    #expect(laptop.state.epoch == 1 && !laptop.state.epochDue)
+    try await anna.syncNow()
+    #expect(anna.secrets == laptop.secrets)
 
     // Then the laptop is lost too: Anna resets Ben, who joins again as himself.
     let p = Payment(id: UUID.v7().lower, kind: .expense, title: "Strom", date: "2026-11-02", amount: 9_000, track: false,
@@ -138,11 +142,21 @@ func lostDevicesAndRecovery() async throws {
     try laptop.submit(.paymentCreated(p))
     try await laptop.syncNow()
     try await anna.syncNow()
+
+    // Even with every blob from the server, the lost phone can't read the payment.
+    let all = try await ServerClient(base: server).read(signer: laptop.credentials.signer, groupID: anna.id, after: 0).events
+    var phoneView = try Ledger(groupID: anna.id, secrets: ben.secrets, boxes: [ben.credentials.box])
+    phoneView.apply(all)
+    #expect(phoneView.secrets.count == 1)
+    #expect(phoneView.state.payments[p.id] == nil)
+    #expect(anna.state.payments[p.id] != nil)
     let again = try await anna.resetMember(ben.me)
     try? await laptop.syncNow()
     #expect(laptop.isRemoved)
     let benNew = try await GroupSession.join(again, store: MemoryCredentialStore(), cacheRoot: dir("benNew"))
     #expect(benNew.me == ben.me)
+    #expect(benNew.secrets == anna.secrets) // from the invite's keyring
+    #expect(anna.state.epoch == 2)
     #expect(benNew.state.summary.balances[ben.me] == 4_500)
 
     // Anna loses her phone and restores the group with her recovery kit.
@@ -152,6 +166,7 @@ func lostDevicesAndRecovery() async throws {
     try? await anna.syncNow()
     #expect(anna.isRemoved)
     #expect(!anna.isAdmin)
+    #expect(restored.state.epoch == 3) // recovering started an epoch
 
     // A new kit replaces the old one.
     let newKit = try await restored.newRecoveryKit()
@@ -163,4 +178,36 @@ func lostDevicesAndRecovery() async throws {
     try await benNew.syncNow()
     #expect(benNew.state.history.filter { $0.rejection != nil }.isEmpty)
     #expect(benNew.state == restored2.state)
+    #expect(restored2.state.epoch == 5) // the new kit and the second recovery each started one
+    #expect(benNew.secrets.count == 6)
+}
+
+/// A device that writes before it has seen a new epoch: its event is stale,
+/// and it writes it again under the new epoch (PROTOCOL.md §5.4 step 10).
+@MainActor
+@Test(.enabled(if: enabled))
+func staleWritesAreWrittenAgain() async throws {
+    let server = URL(string: env["OB_TEST_SERVER"]!)!
+    let token = env["OB_TEST_OWNER_TOKEN"] ?? ""
+    let tmp = FileManager.default.temporaryDirectory.appending(path: "ob-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    let (anna, _) = try await GroupSession.create(server: server, token: token, name: "Büro", currency: "EUR", myName: "Anna",
+                                                  store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "anna"))
+    let ben = try await GroupSession.join(try await anna.addMember(name: "Ben"), store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "ben"))
+
+    // Anna starts epoch 1 (a new recovery kit); Ben hasn't seen it and writes.
+    _ = try await anna.newRecoveryKit()
+    #expect(anna.state.epoch == 1)
+    let p = Payment(id: UUID.v7().lower, kind: .expense, title: "Kaffee", date: "2026-11-02", amount: 1_200, track: false,
+                    in: .init(mode: "exact", lines: [.init(member: anna.me, amount: 600), .init(member: ben.me, amount: 600)]),
+                    out: .init(mode: "exact", lines: [.init(member: ben.me, amount: 1_200)]))
+    try ben.submit(.paymentCreated(p))
+    try await ben.syncNow()
+    try await ben.syncNow()
+    #expect(ben.pendingCount == 0)
+    try await anna.syncNow()
+    #expect(anna.state.payments[p.id] != nil)
+    #expect(anna.state.history.filter { $0.rejection == .staleEpoch }.count == 1) // the first attempt
+    #expect(anna.state == ben.state)
 }

@@ -22,9 +22,9 @@ of ciphertext and never sees names or amounts.
 | Hosting model | Bring your own server. The server owner (`ADMIN_TOKEN`) approves groups: creates them directly or hands out one-time creation codes. The token gives no access to any group (2026-11-02) | Running a server doesn't make you able to read the groups on it |
 | Crypto | HKDF-SHA256, ChaCha20-Poly1305, Ed25519, SHA-256. CryptoKit on iOS, BouncyCastle (lightweight API) on Android, stdlib + x/crypto in Go | Available on every target platform; BouncyCastle behaves the same on every Android version |
 | Identity | One Ed25519 key per device of a member per group; a member (a person or a company) may have several, all equal. Signs events (clients verify) and requests (server verifies). No accounts | A member is identified by its keys; tracking is per member, not per person |
-| Joining | Per-member invite: admin adds and names the member, shows that member's QR (server, group id, member id, group secret, one-time invite key) for its first device. Further devices: any device of the member shows a one-time device QR for its own member (2026-11-01) | One invite, one key; the admin can't add devices to a member that already joined, so nobody else can speak for it |
+| Joining | Per-member invite: admin adds and names the member, shows that member's QR (server, group id, member id, one-time invite seed; no group secret: the server releases a sealed keyring on claim) for its first device. Further devices: any device of the member shows a one-time device QR for its own member (2026-11-01) | One invite, one key; the admin can't add devices to a member that already joined, so nobody else can speak for it |
 | Recovery | Members who lost every device: the admin resets them (new invite, same member). The admin: a per-group recovery link, shown once, kept in a password manager (2026-11-02) | Without it a lost admin phone would freeze the group |
-| Removal | Devices are removed by another device of the member or by the admin; the server refuses removed keys. `K_enc` is not rotated yet (key epochs on the roadmap) (2026-11-02) | |
+| Removal | Devices are removed by another device of the member or by the admin; the server refuses removed keys, and a new key epoch starts: a fresh secret sealed (X25519) to every remaining device, pending invite and the recovery key (2026-11-02) | A removed device can't read what comes after, even with the server's help |
 | Permissions | Server: who may read and write (key registry, roles). Clients: content rules, enforced identically, invalid events stay visible | The server can't see content |
 | Content rules | Any member records payments for anyone. Only the receiver (any member for unclaimed seats) or the admin records an arrival. Only the creator or the admin edits or deletes a payment | |
 | Payments | One event type with in split, out split, `track` flag. Income, Expense and Settle up are forms over it | One math rule on every platform; new forms need no protocol change |
@@ -152,8 +152,7 @@ full-screen task screens instead of sheets, bottom sheets for small tasks.
 
 ## Roadmap
 
-- Remove members entirely: `member.removed`; key epochs (`K_enc` rotation
-  after a device is removed).
+- Remove members entirely: `member.removed` (with a new key epoch).
 - Several admins.
 - Encrypted snapshots for long ledgers; encrypted attachments (receipt photos)
   in a bucket.

@@ -82,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/groups/{group}/invites/{key}", s.signed(roleMember, s.revokeInvite))
 	mux.HandleFunc("POST /v1/groups/{group}/claim", s.signed(roleInvite, s.claim))
 	mux.HandleFunc("DELETE /v1/groups/{group}/keys/{key}", s.signed(roleMember, s.removeKey))
+	mux.HandleFunc("GET /v1/groups/{group}/keyring", s.signed(roleMember, s.keyring))
 	mux.HandleFunc("PUT /v1/groups/{group}/recovery", s.signed(roleAdmin, s.replaceRecovery))
 	mux.HandleFunc("POST /v1/groups/{group}/recover", s.signed(roleRecovery, s.recoverAdmin))
 	mux.HandleFunc("POST /v1/groups/{group}/events", s.signed(roleMember, s.appendEvents))

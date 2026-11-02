@@ -5,6 +5,7 @@
 package protocol
 
 import (
+	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hkdf"
 	"crypto/rand"
@@ -23,7 +24,9 @@ import (
 
 const (
 	// BlobVersion is the first byte of every event blob (§6.1).
-	BlobVersion = 0x01
+	BlobVersion = 0x02
+	// BlobHeader is version, epoch and nonce (§6.1).
+	BlobHeader = 1 + 4 + chacha20poly1305.NonceSize
 	// PadBlock is the plaintext padding granularity (§6.1).
 	PadBlock = 256
 	// MaxClockSkew is how far a request timestamp may be from the server clock (§5.1).
@@ -36,24 +39,40 @@ const (
 	labelReq     = "open-balance/v1/req\n"
 	labelClaim   = "open-balance/v1/claim"
 	labelRecover = "open-balance/v1/recover"
+	labelBox     = "open-balance/v1/box"
+
+	// LabelEpoch and LabelKeyring are the seal labels of §3.5.
+	LabelEpoch   = "open-balance/v1/epoch"
+	LabelKeyring = "open-balance/v1/keyring"
 )
 
 // B64 is base64url without padding, the encoding for keys, blobs and signatures.
 var B64 = base64.RawURLEncoding
 
-// DeriveEncKey returns K_enc for a group (§3.1).
-func DeriveEncKey(secret []byte, groupID uuid.UUID) ([]byte, error) {
+// DeriveEncKey returns K_e, the key of epoch e of a group (§3.1).
+func DeriveEncKey(secret []byte, groupID uuid.UUID, epoch uint32) ([]byte, error) {
 	if len(secret) != 32 {
-		return nil, errors.New("group secret must be 32 bytes")
+		return nil, errors.New("epoch secret must be 32 bytes")
 	}
-	return hkdf.Key(sha256.New, secret, groupID[:], labelEnc, 32)
+	return hkdf.Key(sha256.New, secret, groupID[:], labelEnc+string(u32(epoch)), 32)
 }
 
-func eventAAD(groupID, eventID uuid.UUID) []byte {
-	aad := make([]byte, 0, len(labelEvent)+32)
+func u32(v uint32) []byte { return binary.BigEndian.AppendUint32(nil, v) }
+
+func eventAAD(groupID, eventID uuid.UUID, epoch uint32) []byte {
+	aad := make([]byte, 0, len(labelEvent)+36)
 	aad = append(aad, labelEvent...)
 	aad = append(aad, groupID[:]...)
-	return append(aad, eventID[:]...)
+	aad = append(aad, eventID[:]...)
+	return append(aad, u32(epoch)...)
+}
+
+// BlobEpoch reads the epoch a blob was sealed with (§6.1).
+func BlobEpoch(blob []byte) (uint32, error) {
+	if len(blob) < BlobHeader+chacha20poly1305.Overhead || blob[0] != BlobVersion {
+		return 0, errors.New("not a version 2 blob")
+	}
+	return binary.BigEndian.Uint32(blob[1:5]), nil
 }
 
 // EventSigningInput is the message an event signature covers (§6.1).
@@ -76,38 +95,42 @@ func Plaintext(body, sig []byte) []byte {
 	return p
 }
 
-// SealEvent signs body with the author's key and encrypts it into a blob.
-func SealEvent(encKey []byte, groupID, eventID uuid.UUID, body []byte, author ed25519.PrivateKey) ([]byte, error) {
+// SealEvent signs body with the author's key and encrypts it into a blob of
+// the given epoch; encKey is that epoch's K_e.
+func SealEvent(encKey []byte, groupID, eventID uuid.UUID, epoch uint32, body []byte, author ed25519.PrivateKey) ([]byte, error) {
 	nonce := make([]byte, chacha20poly1305.NonceSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
-	return SealEventWithNonce(encKey, groupID, eventID, body, author, nonce)
+	return SealEventWithNonce(encKey, groupID, eventID, epoch, body, author, nonce)
 }
 
 // SealEventWithNonce is SealEvent with a caller-chosen nonce, for test vectors only.
-func SealEventWithNonce(encKey []byte, groupID, eventID uuid.UUID, body []byte, author ed25519.PrivateKey, nonce []byte) ([]byte, error) {
+func SealEventWithNonce(encKey []byte, groupID, eventID uuid.UUID, epoch uint32, body []byte, author ed25519.PrivateKey, nonce []byte) ([]byte, error) {
 	aead, err := chacha20poly1305.New(encKey)
 	if err != nil {
 		return nil, err
 	}
 	sig := ed25519.Sign(author, EventSigningInput(groupID, eventID, body))
-	out := append([]byte{BlobVersion}, nonce...)
-	return aead.Seal(out, nonce, Plaintext(body, sig), eventAAD(groupID, eventID)), nil
+	out := append([]byte{BlobVersion}, u32(epoch)...)
+	out = append(out, nonce...)
+	return aead.Seal(out, nonce, Plaintext(body, sig), eventAAD(groupID, eventID, epoch)), nil
 }
 
-// OpenEvent decrypts a blob and returns the body and its signature. It does
-// not verify the signature: the reader has to look up the author's key first.
+// OpenEvent decrypts a blob with the key of its epoch (see BlobEpoch) and
+// returns the body and its signature. It does not verify the signature: the
+// reader has to look up the author's key first.
 func OpenEvent(encKey []byte, groupID, eventID uuid.UUID, blob []byte) (body, sig []byte, err error) {
 	aead, err := chacha20poly1305.New(encKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(blob) < 1+aead.NonceSize()+aead.Overhead() || blob[0] != BlobVersion {
-		return nil, nil, errors.New("not a v1 blob")
+	epoch, err := BlobEpoch(blob)
+	if err != nil {
+		return nil, nil, err
 	}
-	nonce := blob[1 : 1+aead.NonceSize()]
-	p, err := aead.Open(nil, nonce, blob[1+aead.NonceSize():], eventAAD(groupID, eventID))
+	nonce := blob[5:BlobHeader]
+	p, err := aead.Open(nil, nonce, blob[BlobHeader:], eventAAD(groupID, eventID, epoch))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -159,6 +182,75 @@ func RecoverInput(groupID uuid.UUID, key []byte) []byte {
 	m = append(m, labelRecover...)
 	m = append(m, groupID[:]...)
 	return append(m, key...)
+}
+
+// BoxKey derives the X25519 box key of a seed: a member key seed, an invite
+// seed or the recovery seed (§3.5).
+func BoxKey(seed []byte) (*ecdh.PrivateKey, error) {
+	if len(seed) != 32 {
+		return nil, errors.New("seed must be 32 bytes")
+	}
+	k, err := hkdf.Key(sha256.New, seed, nil, labelBox, 32)
+	if err != nil {
+		return nil, err
+	}
+	return ecdh.X25519().NewPrivateKey(k)
+}
+
+// Seal seals m to the box key to under label (§3.5).
+func Seal(groupID uuid.UUID, to []byte, label string, m []byte) ([]byte, error) {
+	e, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return SealWithEphemeral(groupID, to, label, m, e)
+}
+
+// SealWithEphemeral is Seal with a caller-chosen ephemeral key, for test vectors only.
+func SealWithEphemeral(groupID uuid.UUID, to []byte, label string, m []byte, e *ecdh.PrivateKey) ([]byte, error) {
+	k, err := sealKey(groupID, e, to, e.PublicKey().Bytes(), to, label)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := chacha20poly1305.New(k)
+	if err != nil {
+		return nil, err
+	}
+	return aead.Seal(e.PublicKey().Bytes(), make([]byte, chacha20poly1305.NonceSize), m, nil), nil
+}
+
+// Open opens what Seal sealed to box's public key.
+func Open(groupID uuid.UUID, box *ecdh.PrivateKey, label string, sealed []byte) ([]byte, error) {
+	if len(sealed) < 32+chacha20poly1305.Overhead {
+		return nil, errors.New("sealed data too short")
+	}
+	k, err := sealKey(groupID, box, sealed[:32], sealed[:32], box.PublicKey().Bytes(), label)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := chacha20poly1305.New(k)
+	if err != nil {
+		return nil, err
+	}
+	return aead.Open(nil, make([]byte, chacha20poly1305.NonceSize), sealed[32:], nil)
+}
+
+// sealKey is k of §3.5: own is this side's private key and peer the other
+// side's public key; ePub and to are the ephemeral and the recipient's keys.
+func sealKey(groupID uuid.UUID, own *ecdh.PrivateKey, peer, ePub, to []byte, label string) ([]byte, error) {
+	pub, err := ecdh.X25519().NewPublicKey(peer)
+	if err != nil {
+		return nil, err
+	}
+	z, err := own.ECDH(pub)
+	if err != nil {
+		return nil, err // all-zero shared secret
+	}
+	info := make([]byte, 0, len(label)+64)
+	info = append(info, label...)
+	info = append(info, ePub...)
+	info = append(info, to...)
+	return hkdf.Key(sha256.New, z, groupID[:], string(info), 32)
 }
 
 // RequestSigningInput is the message a request signature covers (§5.1).

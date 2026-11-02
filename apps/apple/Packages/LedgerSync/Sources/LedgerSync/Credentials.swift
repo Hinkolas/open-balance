@@ -8,7 +8,8 @@ import Security
 public struct GroupCredentials: Codable, Sendable, Equatable, Identifiable {
     public var server: URL
     public var groupID: UUID
-    public var secret: Data
+    /// Every epoch secret this device has, by epoch (PROTOCOL.md §3.1).
+    public var secrets: [Data]
     public var memberID: MemberID
     public var memberSeed: Data
     /// Invite seeds of members this device (as admin) added and that have not
@@ -27,10 +28,15 @@ public struct GroupCredentials: Codable, Sendable, Equatable, Identifiable {
         get throws { try Curve25519.Signing.PrivateKey(rawRepresentation: memberSeed) }
     }
 
-    public init(server: URL, groupID: UUID, secret: Data, memberID: MemberID, memberSeed: Data, registered: Bool) {
+    /// This device's box key (§3.5), derived from its member key seed.
+    public var box: Curve25519.KeyAgreement.PrivateKey {
+        get throws { try LedgerCrypto.boxKey(seed: memberSeed) }
+    }
+
+    public init(server: URL, groupID: UUID, secrets: [Data], memberID: MemberID, memberSeed: Data, registered: Bool) {
         self.server = server
         self.groupID = groupID
-        self.secret = secret
+        self.secrets = secrets
         self.memberID = memberID
         self.memberSeed = memberSeed
         self.registered = registered

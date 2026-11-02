@@ -29,11 +29,12 @@ public enum EventData: Sendable, Equatable {
     case groupCreated(GroupCreated)
     case groupUpdated(GroupUpdated)
     case groupRecoveryChanged(GroupRecoveryChanged)
+    case groupEpochStarted(GroupEpochStarted)
     case memberAdded(MemberAdded)
     case memberInviteRenewed(MemberInviteRenewed)
     case memberClaimed(MemberClaimed)
     case memberUpdated(MemberUpdated)
-    case memberDeviceInvited(MemberDeviceInvite)
+    case memberDeviceInvited(MemberDeviceInvited)
     case memberDeviceClaimed(MemberDeviceClaimed)
     case memberDeviceInviteRevoked(MemberDeviceInvite)
     case memberDeviceRemoved(MemberDeviceRemoved)
@@ -50,6 +51,7 @@ public enum EventData: Sendable, Equatable {
         case .groupCreated: "group.created"
         case .groupUpdated: "group.updated"
         case .groupRecoveryChanged: "group.recovery_changed"
+        case .groupEpochStarted: "group.epoch_started"
         case .memberAdded: "member.added"
         case .memberInviteRenewed: "member.invite_renewed"
         case .memberClaimed: "member.claimed"
@@ -73,23 +75,27 @@ public struct GroupCreated: Codable, Sendable, Equatable {
     public var name: String
     public var currency: String
     public var admin: Admin
-    /// Public recovery key (§3.4).
+    /// Public recovery key (§3.4) and its box key (§3.5).
     public var recoveryKey: String
+    public var recoveryBoxKey: String
     public struct Admin: Codable, Sendable, Equatable {
         public var id: MemberID
         public var name: String
         public var key: String
-        public init(id: MemberID, name: String, key: String) {
+        public var boxKey: String
+        public init(id: MemberID, name: String, key: String, boxKey: String) {
             self.id = id
             self.name = name
             self.key = key
+            self.boxKey = boxKey
         }
     }
-    public init(name: String, currency: String, admin: Admin, recoveryKey: String) {
+    public init(name: String, currency: String, admin: Admin, recoveryKey: String, recoveryBoxKey: String) {
         self.name = name
         self.currency = currency
         self.admin = admin
         self.recoveryKey = recoveryKey
+        self.recoveryBoxKey = recoveryBoxKey
     }
 }
 
@@ -101,36 +107,66 @@ public struct GroupUpdated: Codable, Sendable, Equatable {
 /// `group.recovery_changed` (§7.2): a new recovery key replaces the current one.
 public struct GroupRecoveryChanged: Codable, Sendable, Equatable {
     public var recoveryKey: String
-    public init(recoveryKey: String) { self.recoveryKey = recoveryKey }
+    public var recoveryBoxKey: String
+    public init(recoveryKey: String, recoveryBoxKey: String) {
+        self.recoveryKey = recoveryKey
+        self.recoveryBoxKey = recoveryBoxKey
+    }
+}
+
+/// `group.epoch_started` (§7.2): the new epoch's secret, sealed to every reader.
+public struct GroupEpochStarted: Codable, Sendable, Equatable {
+    public var epoch: UInt32
+    public var keys: [Entry]
+    public struct Entry: Codable, Sendable, Equatable {
+        /// The reader's box key.
+        public var key: String
+        /// seal(key, "open-balance/v1/epoch", u32be(epoch) ‖ S_epoch).
+        public var secret: String
+        public init(key: String, secret: String) {
+            self.key = key
+            self.secret = secret
+        }
+    }
+    public init(epoch: UInt32, keys: [Entry]) {
+        self.epoch = epoch
+        self.keys = keys
+    }
 }
 
 public struct MemberAdded: Codable, Sendable, Equatable {
     public var id: MemberID
     public var name: String
     public var inviteKey: String
-    public init(id: MemberID, name: String, inviteKey: String) {
+    public var inviteBoxKey: String
+    public init(id: MemberID, name: String, inviteKey: String, inviteBoxKey: String) {
         self.id = id
         self.name = name
         self.inviteKey = inviteKey
+        self.inviteBoxKey = inviteBoxKey
     }
 }
 
 public struct MemberInviteRenewed: Codable, Sendable, Equatable {
     public var id: MemberID
     public var inviteKey: String
-    public init(id: MemberID, inviteKey: String) {
+    public var inviteBoxKey: String
+    public init(id: MemberID, inviteKey: String, inviteBoxKey: String) {
         self.id = id
         self.inviteKey = inviteKey
+        self.inviteBoxKey = inviteBoxKey
     }
 }
 
 public struct MemberClaimed: Codable, Sendable, Equatable {
     public var id: MemberID
     public var key: String
+    public var boxKey: String
     public var inviteSig: String
-    public init(id: MemberID, key: String, inviteSig: String) {
+    public init(id: MemberID, key: String, boxKey: String, inviteSig: String) {
         self.id = id
         self.key = key
+        self.boxKey = boxKey
         self.inviteSig = inviteSig
     }
 }
@@ -144,7 +180,19 @@ public struct MemberUpdated: Codable, Sendable, Equatable {
     }
 }
 
-/// `member.device_invited` and `member.device_invite_revoked` (§7.3).
+/// `member.device_invited` (§7.3).
+public struct MemberDeviceInvited: Codable, Sendable, Equatable {
+    public var id: MemberID
+    public var inviteKey: String
+    public var inviteBoxKey: String
+    public init(id: MemberID, inviteKey: String, inviteBoxKey: String) {
+        self.id = id
+        self.inviteKey = inviteKey
+        self.inviteBoxKey = inviteBoxKey
+    }
+}
+
+/// `member.device_invite_revoked` (§7.3).
 public struct MemberDeviceInvite: Codable, Sendable, Equatable {
     public var id: MemberID
     public var inviteKey: String
@@ -158,11 +206,13 @@ public struct MemberDeviceInvite: Codable, Sendable, Equatable {
 public struct MemberDeviceClaimed: Codable, Sendable, Equatable {
     public var id: MemberID
     public var key: String
+    public var boxKey: String
     public var inviteKey: String
     public var inviteSig: String
-    public init(id: MemberID, key: String, inviteKey: String, inviteSig: String) {
+    public init(id: MemberID, key: String, boxKey: String, inviteKey: String, inviteSig: String) {
         self.id = id
         self.key = key
+        self.boxKey = boxKey
         self.inviteKey = inviteKey
         self.inviteSig = inviteSig
     }
@@ -182,10 +232,12 @@ public struct MemberDeviceRemoved: Codable, Sendable, Equatable {
 public struct MemberRecovered: Codable, Sendable, Equatable {
     public var id: MemberID
     public var key: String
+    public var boxKey: String
     public var recoverySig: String
-    public init(id: MemberID, key: String, recoverySig: String) {
+    public init(id: MemberID, key: String, boxKey: String, recoverySig: String) {
         self.id = id
         self.key = key
+        self.boxKey = boxKey
         self.recoverySig = recoverySig
     }
 }
@@ -298,11 +350,13 @@ public enum EventCoding {
         case .groupCreated(let d): return try enc(d)
         case .groupUpdated(let d): return try enc(d)
         case .groupRecoveryChanged(let d): return try enc(d)
+        case .groupEpochStarted(let d): return try enc(d)
         case .memberAdded(let d): return try enc(d)
         case .memberInviteRenewed(let d): return try enc(d)
         case .memberClaimed(let d): return try enc(d)
         case .memberUpdated(let d): return try enc(d)
-        case .memberDeviceInvited(let d), .memberDeviceInviteRevoked(let d): return try enc(d)
+        case .memberDeviceInvited(let d): return try enc(d)
+        case .memberDeviceInviteRevoked(let d): return try enc(d)
         case .memberDeviceClaimed(let d): return try enc(d)
         case .memberDeviceRemoved(let d): return try enc(d)
         case .memberRecovered(let d): return try enc(d)
@@ -326,11 +380,12 @@ public enum EventCoding {
         case "group.created": .groupCreated(try dec(GroupCreated.self))
         case "group.updated": .groupUpdated(try dec(GroupUpdated.self))
         case "group.recovery_changed": .groupRecoveryChanged(try dec(GroupRecoveryChanged.self))
+        case "group.epoch_started": .groupEpochStarted(try dec(GroupEpochStarted.self))
         case "member.added": .memberAdded(try dec(MemberAdded.self))
         case "member.invite_renewed": .memberInviteRenewed(try dec(MemberInviteRenewed.self))
         case "member.claimed": .memberClaimed(try dec(MemberClaimed.self))
         case "member.updated": .memberUpdated(try dec(MemberUpdated.self))
-        case "member.device_invited": .memberDeviceInvited(try dec(MemberDeviceInvite.self))
+        case "member.device_invited": .memberDeviceInvited(try dec(MemberDeviceInvited.self))
         case "member.device_claimed": .memberDeviceClaimed(try dec(MemberDeviceClaimed.self))
         case "member.device_invite_revoked": .memberDeviceInviteRevoked(try dec(MemberDeviceInvite.self))
         case "member.device_removed": .memberDeviceRemoved(try dec(MemberDeviceRemoved.self))

@@ -2,19 +2,19 @@ import CryptoKit
 import Foundation
 import LedgerCore
 
-/// `openbalance://join?v=1&s=<server>&g=<group>&m=<member>#k=<secret>&i=<invite seed>` (PROTOCOL.md §4).
+/// `openbalance://join?v=1&s=<server>&g=<group>&m=<member>#i=<invite seed>` (PROTOCOL.md §4.1).
+/// It holds no group secret: the server releases the invite's sealed keyring
+/// on claim.
 public struct InviteLink: Sendable, Equatable {
     public var server: URL
     public var groupID: UUID
     public var memberID: MemberID
-    public var secret: Data
     public var inviteSeed: Data
 
-    public init(server: URL, groupID: UUID, memberID: MemberID, secret: Data, inviteSeed: Data) {
+    public init(server: URL, groupID: UUID, memberID: MemberID, inviteSeed: Data) {
         self.server = server
         self.groupID = groupID
         self.memberID = memberID
-        self.secret = secret
         self.inviteSeed = inviteSeed
     }
 
@@ -28,7 +28,7 @@ public struct InviteLink: Sendable, Equatable {
             .init(name: "g", value: groupID.lower),
             .init(name: "m", value: memberID),
         ]
-        c.fragment = "k=\(secret.base64URL)&i=\(inviteSeed.base64URL)"
+        c.fragment = "i=\(inviteSeed.base64URL)"
         return c.url!
     }
 
@@ -45,10 +45,9 @@ public struct InviteLink: Sendable, Equatable {
         }
         guard q("v") == "1", let s = q("s"), let server = URL(string: s), ["https", "http"].contains(server.scheme),
               let g = q("g"), let group = UUID(uuidString: g), let m = q("m"), UUID(uuidString: m) != nil,
-              let k = f["k"].flatMap(Data.init(base64URL:)), k.count == 32,
               let i = f["i"].flatMap(Data.init(base64URL:)), i.count == 32
         else { return nil }
-        self.init(server: server, groupID: group, memberID: m.lowercased(), secret: k, inviteSeed: i)
+        self.init(server: server, groupID: group, memberID: m.lowercased(), inviteSeed: i)
     }
 
     /// Also accept the link pasted as text, with whitespace around it.

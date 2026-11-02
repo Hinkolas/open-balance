@@ -45,4 +45,5 @@ type GroupKey struct {
 	CreatedBy []byte
 	GrantRole *string
 	Seat      []byte
+	Keyring   []byte
 }

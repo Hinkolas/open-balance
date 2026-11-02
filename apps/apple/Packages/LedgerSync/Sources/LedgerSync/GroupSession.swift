@@ -35,8 +35,12 @@ public final class GroupSession: Identifiable {
     @ObservationIgnored private var tail: Task<Void, Error>?
     @ObservationIgnored private var syncQueued = false
 
-    /// `cacheRoot` defaults to Application Support; tests pass a temporary directory.
-    public init(credentials: GroupCredentials, store: CredentialStore = KeychainCredentialStore(), cacheRoot: URL? = nil) throws {
+    /// `cacheRoot` defaults to Application Support; tests pass a temporary
+    /// directory. `extraBoxes` are box keys this device holds only while it
+    /// joins or recovers (the invite's, the recovery key's): epochs started
+    /// meanwhile are sealed to them (PROTOCOL.md §5.4 steps 3 and 8).
+    public init(credentials: GroupCredentials, store: CredentialStore = KeychainCredentialStore(), cacheRoot: URL? = nil,
+                extraBoxes: [Curve25519.KeyAgreement.PrivateKey] = []) throws {
         self.credentials = credentials
         self.groupID = credentials.groupID
         self.store = store
@@ -45,12 +49,16 @@ public final class GroupSession: Identifiable {
         self.deviceKey = try credentials.signer.publicKey.rawRepresentation
         self.confirmed = cache.loadEvents()
         self.outbox = cache.loadOutbox()
-        var ledger = try Ledger(groupID: credentials.groupID, secret: credentials.secret)
+        var ledger = try Ledger(groupID: credentials.groupID, secrets: credentials.secrets, boxes: [try credentials.box] + extraBoxes)
         ledger.apply(confirmed)
         self.ledger = ledger
         self.state = ledger.state
         recompute()
+        try keepSecrets()
     }
+
+    /// Every epoch secret this device has, by epoch.
+    public var secrets: [Data] { ledger.secrets }
 
     public var me: MemberID { credentials.memberID }
     public var isAdmin: Bool { state.adminID == me && !isRemoved }
@@ -63,13 +71,25 @@ public final class GroupSession: Identifiable {
     /// Seal an event as this member, show it, and sync.
     @discardableResult
     public func submit(_ data: EventData) throws -> SealedEvent {
-        let writer = try EventWriter(groupID: groupID, secret: credentials.secret, author: me, signer: credentials.signer)
-        let event = try writer.write(data, seen: ledger.state.head)
+        let event = try writer().write(data, seen: ledger.state.head)
         outbox.append(event)
         cache.saveOutbox(outbox)
         recompute()
         requestSync()
         return event
+    }
+
+    /// A writer for the current confirmed epoch.
+    private func writer() throws -> EventWriter {
+        guard let secret = ledger.currentSecret else { throw FlowError.noEpochSecret }
+        return try EventWriter(groupID: groupID, secret: secret, epoch: ledger.state.epoch, author: me, signer: credentials.signer)
+    }
+
+    /// Store epoch secrets found in the ledger, so a restart doesn't need the
+    /// box keys they were sealed to.
+    private func keepSecrets() throws {
+        guard ledger.secrets.count > credentials.secrets.count else { return }
+        try updateCredentials { $0.secrets = ledger.secrets }
     }
 
     public func updateCredentials(_ change: (inout GroupCredentials) -> Void) throws {
@@ -98,6 +118,7 @@ public final class GroupSession: Identifiable {
             try await self.noteAccess {
                 try await self.push()
                 try await self.pull()
+                try await self.startEpochIfDue()
             }
         }
     }
@@ -131,6 +152,7 @@ public final class GroupSession: Identifiable {
             try await noteAccess {
                 try await push()
                 try await pull()
+                try await startEpochIfDue()
             }
             lastError = nil
         } catch let e as ServerError where accessLost && e.status == 403 {
@@ -141,17 +163,45 @@ public final class GroupSession: Identifiable {
     }
 
     /// Append outbox events not yet sent in this run. They stay in the outbox
-    /// (and on screen as pending) until a pull returns them.
+    /// (and on screen as pending) until a pull returns them. Each is sealed
+    /// with the current epoch first; after an epoch start the rest waits for
+    /// a pull, so it is sealed with the new epoch (§5.4 step 10).
     private func push() async throws {
         guard credentials.registered else { return }
-        let unsent = outbox.filter { !pushed.contains($0.id) }
-        guard !unsent.isEmpty else { return }
         let signer = try credentials.signer
-        for start in stride(from: 0, to: unsent.count, by: 100) {
-            let batch = Array(unsent[start..<min(start + 100, unsent.count)])
+        while true {
+            let unsent = outbox.filter { !pushed.contains($0.id) }
+            guard !unsent.isEmpty else { return }
+            let w = try writer()
+            var batch: [SealedEvent] = []
+            for e in unsent {
+                let sealed = e.epoch == w.epoch ? e : try w.reseal(e)
+                if sealed != e, let i = outbox.firstIndex(where: { $0.id == e.id }) { outbox[i] = sealed }
+                batch.append(sealed)
+                if batch.count == 100 || Self.startsEpoch(sealed) { break }
+            }
+            cache.saveOutbox(outbox)
             _ = try await client.append(signer: signer, groupID: groupID, events: batch)
             pushed.formUnion(batch.map(\.id))
+            if batch.contains(where: Self.startsEpoch) { try await pull() }
         }
+    }
+
+    private static func startsEpoch(_ e: SealedEvent) -> Bool {
+        if case .groupEpochStarted? = try? EventCoding.decode(e.body).1 { true } else { false }
+    }
+
+    /// Start the epoch the ledger says is due, if it's ours to start: we made
+    /// it due, or we are the admin (§5.4 step 10). Once per sync.
+    private func startEpochIfDue() async throws {
+        let s = ledger.state
+        guard s.epochDue, !isRemoved, s.epochDueBy == me || s.adminID == me, ledger.currentSecret != nil,
+              !outbox.contains(where: Self.startsEpoch)
+        else { return }
+        let (data, _) = try Epochs.start(epoch: s.epoch + 1, readers: s.readers, groupID: groupID)
+        try submit(.groupEpochStarted(data))
+        try await push()
+        try await pull()
     }
 
     @ObservationIgnored private var pushed: Set<UUID> = []
@@ -166,8 +216,15 @@ public final class GroupSession: Identifiable {
                 confirmed.append(contentsOf: events)
                 ledger.apply(events)
                 cache.saveEvents(confirmed)
+                try keepSecrets()
+                let done = outbox.filter { ledger.state.seenIDs.contains($0.id) }
                 outbox.removeAll { ledger.state.seenIDs.contains($0.id) }
                 cache.saveOutbox(outbox)
+                // Ours, but sealed with an epoch that had ended: write them again.
+                let stale = Set(ledger.state.history.suffix(events.count).filter { $0.rejection == .staleEpoch }.map(\.eventID))
+                for e in done where stale.contains(e.id) && !Self.startsEpoch(e) {
+                    if let data = try? EventCoding.decode(e.body).1 { _ = try? submit(data) }
+                }
                 recompute()
             }
             if page.isEmpty || ledger.state.lastSeq >= head || ledger.state.inconsistency != nil { break }

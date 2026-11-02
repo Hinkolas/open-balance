@@ -14,7 +14,7 @@ import (
 const claimInvite = `-- name: ClaimInvite :one
 UPDATE group_keys SET status = 'claimed', updated_at = now()
 WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pending'
-RETURNING grant_role, seat
+RETURNING grant_role, seat, keyring
 `
 
 type ClaimInviteParams struct {
@@ -25,13 +25,14 @@ type ClaimInviteParams struct {
 type ClaimInviteRow struct {
 	GrantRole *string
 	Seat      []byte
+	Keyring   []byte
 }
 
-// Marks a pending invite claimed and returns the role and seat the new key gets.
+// Marks a pending invite claimed and returns the role, seat and keyring the new key gets.
 func (q *Queries) ClaimInvite(ctx context.Context, arg ClaimInviteParams) (ClaimInviteRow, error) {
 	row := q.db.QueryRow(ctx, claimInvite, arg.GroupID, arg.PublicKey)
 	var i ClaimInviteRow
-	err := row.Scan(&i.GrantRole, &i.Seat)
+	err := row.Scan(&i.GrantRole, &i.Seat, &i.Keyring)
 	return i, err
 }
 
@@ -57,9 +58,25 @@ func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, erro
 	return i, err
 }
 
+const getKeyring = `-- name: GetKeyring :one
+SELECT keyring FROM group_keys WHERE group_id = $1 AND public_key = $2
+`
+
+type GetKeyringParams struct {
+	GroupID   uuid.UUID
+	PublicKey []byte
+}
+
+func (q *Queries) GetKeyring(ctx context.Context, arg GetKeyringParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getKeyring, arg.GroupID, arg.PublicKey)
+	var keyring []byte
+	err := row.Scan(&keyring)
+	return keyring, err
+}
+
 const insertInvite = `-- name: InsertInvite :execrows
-INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role, seat)
-VALUES ($1, $2, 'invite', 'pending', $3, $4, $5)
+INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role, seat, keyring)
+VALUES ($1, $2, 'invite', 'pending', $3, $4, $5, $6)
 ON CONFLICT DO NOTHING
 `
 
@@ -69,6 +86,7 @@ type InsertInviteParams struct {
 	CreatedBy []byte
 	GrantRole *string
 	Seat      []byte
+	Keyring   []byte
 }
 
 func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int64, error) {
@@ -78,6 +96,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int
 		arg.CreatedBy,
 		arg.GrantRole,
 		arg.Seat,
+		arg.Keyring,
 	)
 	if err != nil {
 		return 0, err
@@ -86,7 +105,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int
 }
 
 const insertKey = `-- name: InsertKey :execrows
-INSERT INTO group_keys (group_id, public_key, role, status, seat) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO group_keys (group_id, public_key, role, status, seat, keyring) VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT DO NOTHING
 `
 
@@ -96,6 +115,7 @@ type InsertKeyParams struct {
 	Role      string
 	Status    string
 	Seat      []byte
+	Keyring   []byte
 }
 
 func (q *Queries) InsertKey(ctx context.Context, arg InsertKeyParams) (int64, error) {
@@ -105,6 +125,7 @@ func (q *Queries) InsertKey(ctx context.Context, arg InsertKeyParams) (int64, er
 		arg.Role,
 		arg.Status,
 		arg.Seat,
+		arg.Keyring,
 	)
 	if err != nil {
 		return 0, err

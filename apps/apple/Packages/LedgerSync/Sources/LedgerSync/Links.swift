@@ -1,35 +1,33 @@
 import Foundation
 import LedgerCore
 
-/// `openbalance://recover?v=1&s=<server>&g=<group>&m=<admin>#k=<secret>&r=<recovery seed>`
+/// `openbalance://recover?v=1&s=<server>&g=<group>&m=<admin>#r=<recovery seed>`
 /// (PROTOCOL.md §4.2). The admin keeps it outside the app; it is as powerful
 /// as the admin's devices.
 public struct RecoveryLink: Sendable, Equatable {
     public var server: URL
     public var groupID: UUID
     public var adminID: MemberID
-    public var secret: Data
     public var recoverySeed: Data
 
-    public init(server: URL, groupID: UUID, adminID: MemberID, secret: Data, recoverySeed: Data) {
+    public init(server: URL, groupID: UUID, adminID: MemberID, recoverySeed: Data) {
         self.server = server
         self.groupID = groupID
         self.adminID = adminID
-        self.secret = secret
         self.recoverySeed = recoverySeed
     }
 
     public var url: URL {
         LinkCoding.url(host: "recover", query: [("s", server.absoluteString), ("g", groupID.lower), ("m", adminID)],
-                       fragment: "k=\(secret.base64URL)&r=\(recoverySeed.base64URL)")
+                       fragment: "r=\(recoverySeed.base64URL)")
     }
 
     public init?(_ url: URL) {
         guard let (q, f) = LinkCoding.parse(url, host: "recover"), let server = LinkCoding.server(q["s"]),
               let g = q["g"], let group = UUID(uuidString: g), let m = q["m"], UUID(uuidString: m) != nil,
-              let k = LinkCoding.bytes32(f["k"]), let r = LinkCoding.bytes32(f["r"])
+              let r = LinkCoding.bytes32(f["r"])
         else { return nil }
-        self.init(server: server, groupID: group, adminID: m.lowercased(), secret: k, recoverySeed: r)
+        self.init(server: server, groupID: group, adminID: m.lowercased(), recoverySeed: r)
     }
 
     public init?(text: String) {

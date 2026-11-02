@@ -1,13 +1,16 @@
 -- name: InsertKey :execrows
-INSERT INTO group_keys (group_id, public_key, role, status, seat) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO group_keys (group_id, public_key, role, status, seat, keyring) VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT DO NOTHING;
+
+-- name: GetKeyring :one
+SELECT keyring FROM group_keys WHERE group_id = $1 AND public_key = $2;
 
 -- name: GetKey :one
 SELECT role, status, seat FROM group_keys WHERE group_id = $1 AND public_key = $2;
 
 -- name: InsertInvite :execrows
-INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role, seat)
-VALUES ($1, $2, 'invite', 'pending', sqlc.arg(created_by), sqlc.arg(grant_role), sqlc.arg(seat))
+INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role, seat, keyring)
+VALUES ($1, $2, 'invite', 'pending', sqlc.arg(created_by), sqlc.arg(grant_role), sqlc.arg(seat), sqlc.arg(keyring))
 ON CONFLICT DO NOTHING;
 
 -- name: RevokeInvite :execrows
@@ -17,10 +20,10 @@ WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pendin
   AND (sqlc.arg(any_creator)::boolean OR created_by = sqlc.arg(caller));
 
 -- name: ClaimInvite :one
--- Marks a pending invite claimed and returns the role and seat the new key gets.
+-- Marks a pending invite claimed and returns the role, seat and keyring the new key gets.
 UPDATE group_keys SET status = 'claimed', updated_at = now()
 WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pending'
-RETURNING grant_role, seat;
+RETURNING grant_role, seat, keyring;
 
 -- name: RemoveKey :execrows
 -- The admin removes any member or admin key, a member only keys of its own seat.

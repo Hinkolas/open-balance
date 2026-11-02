@@ -30,6 +30,7 @@ public enum Rejection: String, Sendable, Equatable {
     case alreadyClaimed = "already_claimed"
     case badInviteSig = "bad_invite_sig"
     case badRecoverySig = "bad_recovery_sig"
+    case staleEpoch = "stale_epoch"
 }
 
 public struct Member: Sendable, Equatable, Identifiable {
@@ -93,8 +94,18 @@ public struct LedgerState: Sendable, Equatable {
     public var payments: [PaymentID: PaymentRecord] = [:]
     public var paymentOrder: [PaymentID] = []
     public var arrivals: [ArrivalID: Arrival] = [:]
-    /// The current public recovery key (§3.4).
+    /// The current public recovery key (§3.4) and its box key (§3.5).
     public var recoveryKey: Data?
+    public var recoveryBoxKey: Data?
+    /// The box key of every member and invite key (§3.5).
+    public var boxKeys: [Data: Data] = [:]
+    /// The current epoch (§7.2).
+    public var epoch: UInt32 = 0
+    /// A device was removed, the admin recovered or the recovery key changed
+    /// since the last epoch started: a new epoch is due, ideally started by
+    /// `epochDueBy` (§5.4 step 10).
+    public var epochDue = false
+    public var epochDueBy: MemberID?
     /// Every key any valid event introduced; none may appear again (§7.3).
     public var usedKeys: Set<Data> = []
     /// Member keys removed by `member.device_removed` or `member.recovered`.
@@ -116,6 +127,19 @@ public struct LedgerState: Sendable, Equatable {
     public var orderedMembers: [Member] { memberOrder.compactMap { members[$0] } }
     public var livePayments: [PaymentRecord] { paymentOrder.compactMap { payments[$0] }.filter { !$0.deleted } }
 
+    /// The box keys a new epoch's secret is sealed to (§7.2).
+    public var readers: Set<Data> {
+        var keys: [Data] = []
+        for m in members.values {
+            keys += m.keys
+            if !m.isClaimed, let invite = m.inviteKey { keys.append(invite) }
+            keys += m.deviceInvites
+        }
+        var out = Set(keys.compactMap { boxKeys[$0] })
+        if let recoveryBoxKey { out.insert(recoveryBoxKey) }
+        return out
+    }
+
     public func arrivals(of payment: PaymentID) -> [Arrival] {
         arrivals.values.filter { $0.payment == payment && !$0.removed }.sorted { $0.at < $1.at }
     }
@@ -126,14 +150,35 @@ public struct LedgerState: Sendable, Equatable {
 /// Replays events into a `LedgerState` (§8).
 public struct Ledger: Sendable {
     public let groupID: UUID
-    let encKey: SymmetricKey
+    /// The epoch secrets this reader has, by epoch: the ones it started with
+    /// and the ones it found sealed to its box keys.
+    public private(set) var secrets: [Data]
+    private var encKeys: [SymmetricKey]
+    /// Box keys of this reader: its device, and while joining or recovering
+    /// the invite or recovery key.
+    let boxes: [Curve25519.KeyAgreement.PrivateKey]
     public private(set) var state: LedgerState
 
-    public init(groupID: UUID, secret: Data) throws {
+    public init(groupID: UUID, secrets: [Data], boxes: [Curve25519.KeyAgreement.PrivateKey] = []) throws {
         self.groupID = groupID
-        self.encKey = try LedgerCrypto.encKey(secret: secret, groupID: groupID)
+        self.secrets = []
+        self.encKeys = []
+        self.boxes = boxes
         self.state = LedgerState(groupID: groupID)
+        for s in secrets { try add(secret: s) }
     }
+
+    public init(groupID: UUID, secret: Data) throws {
+        try self.init(groupID: groupID, secrets: [secret])
+    }
+
+    private mutating func add(secret: Data) throws {
+        encKeys.append(try LedgerCrypto.encKey(secret: secret, groupID: groupID, epoch: UInt32(secrets.count)))
+        secrets.append(secret)
+    }
+
+    /// The secret of the current epoch, if this reader has it.
+    public var currentSecret: Data? { Int(state.epoch) < secrets.count ? secrets[Int(state.epoch)] : nil }
 
     /// Apply server events in order. Stops at the first inconsistency.
     public mutating func apply(_ events: [RawEvent]) {
@@ -157,7 +202,9 @@ public struct Ledger: Sendable {
             item.rejection = .duplicateID
             return
         }
-        guard let (body, sig) = try? LedgerCrypto.open(blob: e.blob, groupID: groupID, eventID: e.id, key: encKey) else {
+        guard let epoch = LedgerCrypto.blobEpoch(e.blob), Int(epoch) < encKeys.count,
+              let (body, sig) = try? LedgerCrypto.open(blob: e.blob, groupID: groupID, eventID: e.id, key: encKeys[Int(epoch)])
+        else {
             item.rejection = .decrypt
             return genesisCheck(e.seq, valid: false)
         }
@@ -185,6 +232,10 @@ public struct Ledger: Sendable {
         }
         guard keys.contains(where: { LedgerCrypto.verify(signature: sig, body: body, groupID: groupID, eventID: e.id, publicKey: $0) }) else {
             item.rejection = .badSignature
+            return genesisCheck(e.seq, valid: false)
+        }
+        guard epoch == state.epoch else {
+            item.rejection = .staleEpoch
             return genesisCheck(e.seq, valid: false)
         }
         item.rejection = validateAndApply(header: header, data: data, eventID: e.id, seq: e.seq)
@@ -231,16 +282,19 @@ public struct Ledger: Sendable {
         case .groupCreated(let d):
             guard seq == 1 || (seq == nil && !state.isCreated) else { return .misplaced }
             guard h.author == d.admin.id, Self.validName(d.name), Self.validName(d.admin.name),
-                  Currency.isValidCode(d.currency), let key = Data(base64URL: d.admin.key), key.count == 32,
-                  let recovery = Data(base64URL: d.recoveryKey), recovery.count == 32, recovery != key
+                  Currency.isValidCode(d.currency), let key = Self.key(d.admin.key), let box = Self.key(d.admin.boxKey),
+                  let recovery = Self.key(d.recoveryKey), let recoveryBox = Self.key(d.recoveryBoxKey),
+                  Set([key, box, recovery, recoveryBox]).count == 4
             else { return .invalidData }
             state.name = d.name
             state.currency = d.currency
             state.adminID = d.admin.id
             state.recoveryKey = recovery
+            state.recoveryBoxKey = recoveryBox
             use(recovery)
+            use(recoveryBox)
             addMember(Member(id: d.admin.id, name: d.admin.name, isAdmin: true))
-            addKey(key, to: d.admin.id, at: h.at)
+            addKey(key, box: box, to: d.admin.id, at: h.at)
 
         case .groupUpdated(let d):
             guard isAdmin else { return .forbidden }
@@ -249,33 +303,50 @@ public struct Ledger: Sendable {
 
         case .groupRecoveryChanged(let d):
             guard isAdmin else { return .forbidden }
-            guard let key = Data(base64URL: d.recoveryKey), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.recoveryKey), let box = newKey(d.recoveryBoxKey), key != box else { return .invalidData }
             state.recoveryKey = key
+            state.recoveryBoxKey = box
             use(key)
+            use(box)
+            markEpochDue(by: h.author)
+
+        case .groupEpochStarted(let d):
+            guard state.epoch < UInt32.max, d.epoch == state.epoch + 1 else { return .invalidData }
+            var entries: [Data: Data] = [:]
+            for entry in d.keys {
+                guard let key = Self.key(entry.key), let sealed = Data(base64URL: entry.secret), sealed.count == 84,
+                      entries.updateValue(sealed, forKey: key) == nil
+                else { return .invalidData }
+            }
+            guard Set(entries.keys) == state.readers else { return .invalidData }
+            state.epoch = d.epoch
+            state.epochDue = false
+            state.epochDueBy = nil
+            if secrets.count == Int(d.epoch) { unseal(epoch: d.epoch, from: entries) }
 
         case .memberAdded(let d):
             guard isAdmin else { return .forbidden }
             guard state.members[d.id] == nil else { return .duplicateID }
-            guard Self.validName(d.name), let key = Data(base64URL: d.inviteKey), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard Self.validName(d.name), let key = newKey(d.inviteKey), let box = newKey(d.inviteBoxKey), key != box else { return .invalidData }
             addMember(Member(id: d.id, name: d.name, inviteKey: key, isAdmin: false))
-            use(key)
+            addInvite(key, box: box)
 
         case .memberInviteRenewed(let d):
             guard isAdmin else { return .forbidden }
             guard let m = state.members[d.id] else { return .unknownTarget }
             guard !m.isClaimed else { return .alreadyClaimed }
-            guard let key = Data(base64URL: d.inviteKey), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.inviteKey), let box = newKey(d.inviteBoxKey), key != box else { return .invalidData }
             state.members[d.id]?.inviteKey = key
-            use(key)
+            addInvite(key, box: box)
 
         case .memberClaimed(let d):
             guard let m = state.members[d.id] else { return .unknownTarget }
             guard h.author == d.id else { return .forbidden }
             guard !m.isClaimed else { return .alreadyClaimed }
-            guard let key = Data(base64URL: d.key), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.key), let box = newKey(d.boxKey), key != box else { return .invalidData }
             guard let invite = m.inviteKey, inviteSigned(d.inviteSig, by: invite, key: key) else { return .badInviteSig }
             state.members[d.id]?.inviteKey = nil
-            addKey(key, to: d.id, at: h.at)
+            addKey(key, box: box, to: d.id, at: h.at)
 
         case .memberUpdated(let d):
             guard state.members[d.id] != nil else { return .unknownTarget }
@@ -287,19 +358,19 @@ public struct Ledger: Sendable {
             // Only the member itself; the admin adds a first device through member.added.
             guard state.members[d.id] != nil else { return .unknownTarget }
             guard h.author == d.id else { return .forbidden }
-            guard let key = Data(base64URL: d.inviteKey), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.inviteKey), let box = newKey(d.inviteBoxKey), key != box else { return .invalidData }
             state.members[d.id]?.deviceInvites.append(key)
-            use(key)
+            addInvite(key, box: box)
 
         case .memberDeviceClaimed(let d):
             guard let m = state.members[d.id] else { return .unknownTarget }
             guard h.author == d.id else { return .forbidden }
-            guard let key = Data(base64URL: d.key), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.key), let box = newKey(d.boxKey), key != box else { return .invalidData }
             guard let invite = Data(base64URL: d.inviteKey), m.deviceInvites.contains(invite),
                   inviteSigned(d.inviteSig, by: invite, key: key)
             else { return .badInviteSig }
             state.members[d.id]?.deviceInvites.removeAll { $0 == invite }
-            addKey(key, to: d.id, at: h.at)
+            addKey(key, box: box, to: d.id, at: h.at)
 
         case .memberDeviceInviteRevoked(let d):
             guard let m = state.members[d.id] else { return .unknownTarget }
@@ -318,16 +389,18 @@ public struct Ledger: Sendable {
                 state.members[d.id]?.inviteKey = nil
                 state.members[d.id]?.deviceInvites = []
             }
+            markEpochDue(by: h.author)
 
         case .memberRecovered(let d):
             guard d.id == state.adminID, h.author == d.id else { return .forbidden }
-            guard let key = Data(base64URL: d.key), key.count == 32, !keyInUse(key) else { return .invalidData }
+            guard let key = newKey(d.key), let box = newKey(d.boxKey), key != box else { return .invalidData }
             guard let recovery = state.recoveryKey, signed(d.recoverySig, by: recovery, input: LedgerCrypto.recoverInput(groupID: groupID, key: key))
             else { return .badRecoverySig }
             state.removedKeys.formUnion(state.keys(of: d.id))
             state.members[d.id]?.keys = []
             state.members[d.id]?.deviceInvites = []
-            addKey(key, to: d.id, at: h.at)
+            addKey(key, box: box, to: d.id, at: h.at)
+            markEpochDue(by: h.author)
 
         case .paymentCreated(let p):
             guard state.payments[p.id] == nil else { return .duplicateID }
@@ -380,10 +453,47 @@ public struct Ledger: Sendable {
 
     private mutating func use(_ key: Data) { state.usedKeys.insert(key) }
 
-    private mutating func addKey(_ key: Data, to member: MemberID, at: String) {
+    /// A 32-byte key from base64url.
+    static func key(_ s: String) -> Data? {
+        guard let d = Data(base64URL: s), d.count == 32 else { return nil }
+        return d
+    }
+
+    /// A 32-byte key the group hasn't seen yet.
+    private func newKey(_ s: String) -> Data? {
+        guard let d = Self.key(s), !keyInUse(d) else { return nil }
+        return d
+    }
+
+    private mutating func addKey(_ key: Data, box: Data, to member: MemberID, at: String) {
         state.members[member]?.keys.append(key)
         state.keyAddedAt[key] = at
+        state.boxKeys[key] = box
         use(key)
+        use(box)
+    }
+
+    private mutating func addInvite(_ key: Data, box: Data) {
+        state.boxKeys[key] = box
+        use(key)
+        use(box)
+    }
+
+    private mutating func markEpochDue(by author: MemberID) {
+        state.epochDue = true
+        state.epochDueBy = author
+    }
+
+    /// Take the new epoch's secret from the entry sealed to one of our box keys.
+    private mutating func unseal(epoch: UInt32, from entries: [Data: Data]) {
+        for box in boxes {
+            guard let sealed = entries[box.publicKey.rawRepresentation],
+                  let m = try? LedgerCrypto.open(sealed: sealed, box: box, label: LedgerCrypto.labelEpoch, groupID: groupID),
+                  m.count == 36, m.prefix(4) == LedgerCrypto.u32(epoch)
+            else { continue }
+            try? add(secret: Data(m.dropFirst(4)))
+            return
+        }
     }
 
     /// `inviteSig` (§7.3): the invite key vouches for `key` in this group.

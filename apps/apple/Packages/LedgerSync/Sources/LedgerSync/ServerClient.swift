@@ -30,9 +30,10 @@ public struct ServerClient: Sendable {
     }
 
     /// `token` is the server's ADMIN_TOKEN or a creation code (PROTOCOL.md §5.3).
-    public func createGroup(token: String, groupID: UUID, adminKey: Data, recoveryKey: Data) async throws {
+    public func createGroup(token: String, groupID: UUID, adminKey: Data, recoveryKey: Data, recoveryKeyring: Data) async throws {
         let _: Empty = try await send("POST", "/v1/groups", auth: .owner(token),
-                                      body: ["groupId": groupID.lower, "adminKey": adminKey.base64URL, "recoveryKey": recoveryKey.base64URL])
+                                      body: ["groupId": groupID.lower, "adminKey": adminKey.base64URL, "recoveryKey": recoveryKey.base64URL,
+                                             "recoveryKeyring": recoveryKeyring.base64URL])
     }
 
     /// A one-time code that lets someone else create a group (server owner only).
@@ -48,34 +49,51 @@ public struct ServerClient: Sendable {
     }
 
     /// Replace the group's recovery key (admin only).
-    public func replaceRecovery(signer: Curve25519.Signing.PrivateKey, groupID: UUID, recoveryKey: Data) async throws {
+    public func replaceRecovery(signer: Curve25519.Signing.PrivateKey, groupID: UUID, recoveryKey: Data, keyring: Data) async throws {
         let _: Empty = try await send("PUT", "/v1/groups/\(groupID.lower)/recovery", auth: .key(signer),
-                                      body: ["recoveryKey": recoveryKey.base64URL])
+                                      body: ["recoveryKey": recoveryKey.base64URL, "keyring": keyring.base64URL])
     }
 
-    /// Register `member` as the admin's only device, signed with the recovery key.
-    public func recover(recovery: Curve25519.Signing.PrivateKey, member: Curve25519.Signing.PrivateKey, groupID: UUID) async throws {
+    /// Register `member` as the admin's only device, signed with the recovery
+    /// key. Returns the recovery key's sealed keyring.
+    public func recover(recovery: Curve25519.Signing.PrivateKey, member: Curve25519.Signing.PrivateKey, groupID: UUID) async throws -> Data {
         let proof = try member.signature(for: LedgerCrypto.claimInput(groupID: groupID, key: recovery.publicKey.rawRepresentation))
-        let _: Empty = try await send("POST", "/v1/groups/\(groupID.lower)/recover", auth: .key(recovery),
-                                      body: ["memberKey": member.publicKey.rawRepresentation.base64URL, "proof": proof.base64URL])
+        let out: KeyringOut = try await send("POST", "/v1/groups/\(groupID.lower)/recover", auth: .key(recovery),
+                                             body: ["memberKey": member.publicKey.rawRepresentation.base64URL, "proof": proof.base64URL])
+        return try out.data()
+    }
+
+    /// The keyring this key got with its claim or recovery, for a retry after a lost response.
+    public func keyring(signer: Curve25519.Signing.PrivateKey, groupID: UUID) async throws -> Data {
+        let out: KeyringOut = try await send("GET", "/v1/groups/\(groupID.lower)/keyring", auth: .key(signer))
+        return try out.data()
+    }
+
+    struct KeyringOut: Decodable {
+        var keyring: String
+        func data() throws -> Data {
+            guard let d = Data(base64URL: keyring) else { throw ServerError(status: 0, code: "bad_keyring", message: "Server sent an invalid keyring") }
+            return d
+        }
     }
 
     /// `role` is what the claimed key gets on the server: `member`, or `admin`
     /// for the admin's own further devices (PROTOCOL.md §5.3).
-    public func createInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data, role: String = "member") async throws {
+    public func createInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data, keyring: Data, role: String = "member") async throws {
         let _: Empty = try await send("POST", "/v1/groups/\(groupID.lower)/invites", auth: .key(signer),
-                                      body: ["inviteKey": inviteKey.base64URL, "role": role])
+                                      body: ["inviteKey": inviteKey.base64URL, "role": role, "keyring": keyring.base64URL])
     }
 
     public func revokeInvite(signer: Curve25519.Signing.PrivateKey, groupID: UUID, inviteKey: Data) async throws {
         let _: Empty = try await send("DELETE", "/v1/groups/\(groupID.lower)/invites/\(inviteKey.base64URL)", auth: .key(signer))
     }
 
-    /// Register `member` using the one-time invite key.
-    public func claim(invite: Curve25519.Signing.PrivateKey, member: Curve25519.Signing.PrivateKey, groupID: UUID) async throws {
+    /// Register `member` using the one-time invite key. Returns the invite's sealed keyring.
+    public func claim(invite: Curve25519.Signing.PrivateKey, member: Curve25519.Signing.PrivateKey, groupID: UUID) async throws -> Data {
         let proof = try member.signature(for: LedgerCrypto.claimInput(groupID: groupID, key: invite.publicKey.rawRepresentation))
-        let _: Empty = try await send("POST", "/v1/groups/\(groupID.lower)/claim", auth: .key(invite),
-                                      body: ["memberKey": member.publicKey.rawRepresentation.base64URL, "proof": proof.base64URL])
+        let out: KeyringOut = try await send("POST", "/v1/groups/\(groupID.lower)/claim", auth: .key(invite),
+                                             body: ["memberKey": member.publicKey.rawRepresentation.base64URL, "proof": proof.base64URL])
+        return try out.data()
     }
 
     public func append(signer: Curve25519.Signing.PrivateKey, groupID: UUID, events: [SealedEvent]) async throws -> [UUID: UInt64] {

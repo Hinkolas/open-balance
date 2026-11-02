@@ -25,19 +25,25 @@ import (
 // the creation code used, nil for the server owner (§5.3, §5.4).
 func (s *Server) createGroup(w http.ResponseWriter, r *http.Request, codeHash []byte) {
 	var in struct {
-		GroupID     uuid.UUID `json:"groupId"`
-		AdminKey    string    `json:"adminKey"`
-		RecoveryKey string    `json:"recoveryKey"`
+		GroupID         uuid.UUID `json:"groupId"`
+		AdminKey        string    `json:"adminKey"`
+		RecoveryKey     string    `json:"recoveryKey"`
+		RecoveryKeyring string    `json:"recoveryKeyring"`
 	}
 	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err := decodeBody(caller{body: body}, &in); err != nil || in.GroupID == uuid.Nil {
-		writeErr(w, http.StatusBadRequest, "bad_request", "groupId, adminKey and recoveryKey required")
+		writeErr(w, http.StatusBadRequest, "bad_request", "groupId, adminKey, recoveryKey and recoveryKeyring required")
 		return
 	}
 	admin, ok := decodeKey(in.AdminKey)
 	recovery, ok2 := decodeKey(in.RecoveryKey)
 	if !ok || !ok2 || bytes.Equal(admin, recovery) {
 		writeErr(w, http.StatusBadRequest, "bad_request", "adminKey and recoveryKey must be two different base64url Ed25519 public keys")
+		return
+	}
+	keyring, ok := decodeKeyring(in.RecoveryKeyring)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad_request", keyringRule)
 		return
 	}
 	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
@@ -62,7 +68,7 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request, codeHash []
 		if _, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: admin, Role: "admin", Status: "active", Seat: admin}); err != nil {
 			return err
 		}
-		_, err = q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: recovery, Role: "recovery", Status: "active", Seat: admin})
+		_, err = q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: recovery, Role: "recovery", Status: "active", Seat: admin, Keyring: keyring})
 		return err
 	})
 	if errors.Is(err, errBadCode) {
@@ -209,11 +215,17 @@ func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, c caller) 
 	var in struct {
 		InviteKey string `json:"inviteKey"`
 		Role      string `json:"role"`
+		Keyring   string `json:"keyring"`
 	}
 	_ = decodeBody(c, &in)
 	key, ok := decodeKey(in.InviteKey)
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad_request", "inviteKey must be a base64url Ed25519 public key")
+		return
+	}
+	keyring, ok := decodeKeyring(in.Keyring)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad_request", keyringRule)
 		return
 	}
 	grant := in.Role
@@ -236,7 +248,7 @@ func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, c caller) 
 	if c.role == "admin" && grant == "member" {
 		seat = key
 	}
-	n, err := s.q.InsertInvite(r.Context(), store.InsertInviteParams{GroupID: c.group, PublicKey: key, CreatedBy: c.key, GrantRole: &grant, Seat: seat})
+	n, err := s.q.InsertInvite(r.Context(), store.InsertInviteParams{GroupID: c.group, PublicKey: key, CreatedBy: c.key, GrantRole: &grant, Seat: seat, Keyring: keyring})
 	if err != nil {
 		internalErr(w, r, err)
 		return
@@ -271,6 +283,7 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
 	if !ok {
 		return
 	}
+	var keyring []byte
 	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		inv, err := q.ClaimInvite(r.Context(), store.ClaimInviteParams{GroupID: c.group, PublicKey: c.key})
@@ -283,7 +296,8 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
 		if inv.GrantRole != nil {
 			role = *inv.GrantRole
 		}
-		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: role, Status: "active", Seat: inv.Seat})
+		keyring = inv.Keyring
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: role, Status: "active", Seat: inv.Seat, Keyring: inv.Keyring})
 		if err != nil {
 			return err
 		}
@@ -299,7 +313,22 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
 		internalErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]any{"keyring": protocol.B64.EncodeToString(keyring)})
+}
+
+// keyring returns the keyring the caller's key got with its claim or
+// recovery, for a client that lost that response (§5.3).
+func (s *Server) keyring(w http.ResponseWriter, r *http.Request, c caller) {
+	k, err := s.q.GetKeyring(r.Context(), store.GetKeyringParams{GroupID: c.group, PublicKey: c.key})
+	if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	if k == nil {
+		writeErr(w, http.StatusNotFound, "not_found", "this key got no keyring")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keyring": protocol.B64.EncodeToString(k)})
 }
 
 // ---- removing keys and recovery ----
@@ -337,6 +366,7 @@ func (s *Server) removeKey(w http.ResponseWriter, r *http.Request, c caller) {
 func (s *Server) replaceRecovery(w http.ResponseWriter, r *http.Request, c caller) {
 	var in struct {
 		RecoveryKey string `json:"recoveryKey"`
+		Keyring     string `json:"keyring"`
 	}
 	_ = decodeBody(c, &in)
 	key, ok := decodeKey(in.RecoveryKey)
@@ -344,12 +374,17 @@ func (s *Server) replaceRecovery(w http.ResponseWriter, r *http.Request, c calle
 		writeErr(w, http.StatusBadRequest, "bad_request", "recoveryKey must be a base64url Ed25519 public key")
 		return
 	}
+	keyring, ok := decodeKeyring(in.Keyring)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad_request", keyringRule)
+		return
+	}
 	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if err := q.RemoveRecoveryKeys(r.Context(), c.group); err != nil {
 			return err
 		}
-		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "recovery", Status: "active", Seat: c.seat})
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "recovery", Status: "active", Seat: c.seat, Keyring: keyring})
 		if err != nil {
 			return err
 		}
@@ -374,15 +409,20 @@ func (s *Server) recoverAdmin(w http.ResponseWriter, r *http.Request, c caller) 
 	if !ok {
 		return
 	}
+	var keyring []byte
 	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		var err error
+		if keyring, err = q.GetKeyring(r.Context(), store.GetKeyringParams{GroupID: c.group, PublicKey: c.key}); err != nil {
+			return err
+		}
 		if err := q.RevokeInvitesOfSeat(r.Context(), store.RevokeInvitesOfSeatParams{GroupID: c.group, Seat: c.seat}); err != nil {
 			return err
 		}
 		if err := q.RemoveSeat(r.Context(), store.RemoveSeatParams{GroupID: c.group, Seat: c.seat}); err != nil {
 			return err
 		}
-		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "admin", Status: "active", Seat: c.seat})
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "admin", Status: "active", Seat: c.seat, Keyring: keyring})
 		if err != nil {
 			return err
 		}
@@ -398,7 +438,7 @@ func (s *Server) recoverAdmin(w http.ResponseWriter, r *http.Request, c caller) 
 		internalErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]any{"keyring": protocol.B64.EncodeToString(keyring)})
 }
 
 // claimedKey reads `{memberKey, proof}` and checks that the proof is the
@@ -445,8 +485,8 @@ func (s *Server) appendEvents(w http.ResponseWriter, r *http.Request, c caller) 
 	blobs := make([][]byte, len(in.Events))
 	for i, e := range in.Events {
 		b, err := protocol.B64.DecodeString(e.Blob)
-		if e.ID == uuid.Nil || err != nil || len(b) < 1+12+16 || len(b) > maxBlobBytes || b[0] != protocol.BlobVersion {
-			writeErr(w, http.StatusBadRequest, "bad_event", fmt.Sprintf("event %d: id and a v1 blob up to %d bytes required", i, maxBlobBytes))
+		if _, epochErr := protocol.BlobEpoch(b); e.ID == uuid.Nil || err != nil || epochErr != nil || len(b) > maxBlobBytes {
+			writeErr(w, http.StatusBadRequest, "bad_event", fmt.Sprintf("event %d: id and a version 2 blob up to %d bytes required", i, maxBlobBytes))
 			return
 		}
 		blobs[i] = b
@@ -583,6 +623,15 @@ var (
 	errNotFound = errors.New("not found")
 	errBadCode  = errors.New("bad creation code")
 )
+
+const keyringRule = "keyring must be a base64url sealed keyring of at most 64 KiB"
+
+// decodeKeyring checks the size of a sealed keyring (§3.5); its content is
+// sealed to a box key the server doesn't have.
+func decodeKeyring(s string) ([]byte, bool) {
+	b, err := protocol.B64.DecodeString(s)
+	return b, err == nil && len(b) >= 32+16+32 && len(b) <= 64<<10
+}
 
 func decodeKey(s string) ([]byte, bool) {
 	b, err := protocol.B64.DecodeString(s)
