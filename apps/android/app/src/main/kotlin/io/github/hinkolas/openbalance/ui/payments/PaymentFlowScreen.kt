@@ -33,6 +33,9 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -348,6 +351,7 @@ private fun MemberField(
     val field = form.field(m, currency)
     val preview = resolution.preview[m]
     val text = form.text[m] ?: ""
+    val percentLabel = stringResource(R.string.percent)
     // Keeps the cursor while the text is regrouped; follows the form when it changes elsewhere (rest chosen).
     var edit by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
     val shown = if (edit.text == text) edit else TextFieldValue(text, TextRange(text.length))
@@ -363,23 +367,44 @@ private fun MemberField(
             else -> null
         },
         trailingContent = {
+            // The numeric pad has no "%", so a toggle in the field adds or removes it.
+            val percent = shown.text.endsWith("%")
+            fun commit(v: TextFieldValue) {
+                edit = v
+                val clearsRest = form.rest == m && v.text.isNotBlank()
+                onChange(form.copy(text = form.text + (m to v.text), rest = if (clearsRest) null else form.rest))
+            }
             OutlinedTextField(
                 value = shown,
                 onValueChange = { raw ->
-                    // Amounts group as you type; percentages ("15%") stay as typed.
-                    val v = AmountTyping.next(shown.text, raw.text, raw.selection.start, currency)
-                        ?.let { TextFieldValue(it.text, TextRange(it.cursor)) } ?: raw
-                    edit = v
-                    val clearsRest = form.rest == m && v.text.isNotBlank()
-                    onChange(form.copy(text = form.text + (m to v.text), rest = if (clearsRest) null else form.rest))
+                    // Amounts group as you type; a percentage keeps its "%" at the end.
+                    val old = shown.text.removeSuffix("%")
+                    val typed = raw.text.replace("%", "")
+                    val cursor = raw.selection.start.coerceAtMost(typed.length)
+                    val v = AmountTyping.next(old, typed, cursor, currency)
+                        ?.let { TextFieldValue(it.text, TextRange(it.cursor)) } ?: TextFieldValue(typed, TextRange(cursor))
+                    commit(if (percent) v.copy(text = v.text + "%") else v)
                 },
                 placeholder = { Text(placeholder, style = AmountType.row, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) },
                 textStyle = AmountType.row.copy(textAlign = TextAlign.End),
                 singleLine = true,
                 isError = field == SplitForm.Field.Invalid,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false, imeAction = if (last) ImeAction.Done else ImeAction.Next),
+                trailingIcon = {
+                    IconToggleButton(
+                        checked = percent,
+                        onCheckedChange = { on ->
+                            val base = shown.text.removeSuffix("%")
+                            val text = if (on) "$base%" else base
+                            commit(TextFieldValue(text, TextRange(base.length)))
+                        },
+                        modifier = Modifier.semantics { contentDescription = percentLabel },
+                    ) {
+                        Text("%", style = MaterialTheme.typography.titleMedium, color = if (percent) Brand.tint else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = if (last) ImeAction.Done else ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { next() }, onDone = { next() }),
-                modifier = Modifier.widthIn(max = 150.dp),
+                modifier = Modifier.widthIn(max = 180.dp),
             )
         },
     )

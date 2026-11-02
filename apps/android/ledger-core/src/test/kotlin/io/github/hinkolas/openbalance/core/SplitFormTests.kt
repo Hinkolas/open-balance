@@ -74,6 +74,7 @@ class SplitFormTests {
         val f = SplitForm(mapOf("initech" to "abc"))
         assertEquals(listOf("initech"), f.resolve(100, members, "EUR", SplitForm.Fallback.None).invalid)
         assertEquals(SplitForm.Field.Invalid, SplitForm.parse("120%", "EUR"))
+        assertEquals(SplitForm.Field.Empty, SplitForm.parse("%", "EUR"))
     }
 }
 

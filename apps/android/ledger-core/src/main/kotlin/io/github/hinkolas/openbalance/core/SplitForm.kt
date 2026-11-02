@@ -114,7 +114,8 @@ data class SplitForm(
     companion object {
         fun parse(raw: String, currency: String): Field {
             var t = raw.trim()
-            if (t.isEmpty()) return Field.Empty
+            // A bare "%" is a percentage not typed yet (the Android % toggle).
+            if (t.isEmpty() || t == "%") return Field.Empty
             if (t.endsWith("%")) {
                 t = t.dropLast(1)
                 val bp = Money.parse(t, "EUR") ?: return Field.Invalid

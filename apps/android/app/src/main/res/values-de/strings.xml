@@ -249,6 +249,7 @@
     <string name="member_passes_on">%1$s gibt weiter</string>
     <string name="counts_as_arrives">Zählt, sobald das Geld ankommt.</string>
     <string name="use_amount_or_percent" formatted="false">Erlaubt sind Beträge oder Prozente wie 15%.</string>
+    <string name="percent">Prozent</string>
     <string name="amount_or_percent" formatted="false">Betrag oder %</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d Änderung wartet</item>

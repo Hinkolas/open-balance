@@ -253,6 +253,7 @@
     <string name="member_passes_on">%1$s passes on</string>
     <string name="counts_as_arrives">Counts as the money arrives.</string>
     <string name="use_amount_or_percent" formatted="false">Use an amount or a percentage like 15%.</string>
+    <string name="percent">Percent</string>
     <string name="amount_or_percent" formatted="false">Amount or %</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d change waiting</item>
