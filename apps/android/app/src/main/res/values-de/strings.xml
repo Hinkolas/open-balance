@@ -127,7 +127,7 @@
     <string name="reason_bad_invite_sig">Einladung passt nicht</string>
     <string name="members">Mitglieder</string>
     <string name="admin">Admin</string>
-    <string name="invited_not_joined">Eingeladen, noch nicht beigetreten</string>
+    <string name="not_joined_yet">Noch nicht beigetreten</string>
     <string name="role_devices">%1$s · %2$d Geräte</string>
     <string name="invite">Einladen</string>
     <string name="add_member">Mitglied hinzufügen</string>

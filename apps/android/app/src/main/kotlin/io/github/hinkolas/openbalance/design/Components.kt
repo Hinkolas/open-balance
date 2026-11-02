@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -235,14 +236,27 @@ fun GroupedRow(index: Int, count: Int, modifier: Modifier = Modifier, content: @
     ) { content() }
 }
 
+/** The header, or for a section without one the same space, so sections never touch. */
+private fun LazyListScope.sectionTop(key: String, header: String?, gap: Boolean) {
+    when {
+        header != null -> item(key = "$key-header") { SectionHeader(header) }
+        gap -> item(key = "$key-gap") { Spacer(Modifier.height(SectionGap)) }
+    }
+}
+
+/** Space between sections where there is no header. */
+val SectionGap = 24.dp
+
 /** A section of rows built from a list of row contents. */
 fun LazyListScope.section(
     key: String,
     header: String? = null,
     footer: (@Composable () -> Unit)? = null,
+    /** Space above a section without a header, as much as a header takes. Off when the caller already set one. */
+    gap: Boolean = true,
     rows: List<@Composable () -> Unit>,
 ) {
-    if (header != null) item(key = "$key-header") { SectionHeader(header) }
+    sectionTop(key, header, gap)
     rows.forEachIndexed { i, row -> item(key = "$key-$i") { GroupedRow(i, rows.size) { row() } } }
     if (footer != null) item(key = "$key-footer") { footer() }
 }
@@ -254,9 +268,10 @@ fun <T> LazyListScope.sectionItems(
     itemKey: (T) -> Any,
     header: String? = null,
     footer: (@Composable () -> Unit)? = null,
+    gap: Boolean = true,
     row: @Composable (T) -> Unit,
 ) {
-    if (header != null) item(key = "$key-header") { SectionHeader(header) }
+    sectionTop(key, header, gap)
     items.forEachIndexed { i, t -> item(key = "$key-${itemKey(t)}") { GroupedRow(i, items.size) { row(t) } } }
     if (footer != null) item(key = "$key-footer") { footer() }
 }

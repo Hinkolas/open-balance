@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -214,7 +215,8 @@ fun GroupScreen(session: GroupSession) {
 @Composable
 private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> Unit, addDevice: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    val role = stringResource(if (m.isAdmin) R.string.admin else if (m.isClaimed) R.string.joined else R.string.invited_not_joined)
+    // The Invite button beside an unclaimed member already says it's invited; keep the status to one line.
+    val role = stringResource(if (m.isAdmin) R.string.admin else if (m.isClaimed) R.string.joined else R.string.not_joined_yet)
     val status = if (m.keys.size > 1) stringResource(R.string.role_devices, role, m.keys.size) else role
     val canRename = ui.isAdmin || m.id == ui.me
     ListItem(
@@ -225,9 +227,7 @@ private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> 
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (ui.isAdmin && !m.isClaimed) {
-                    FilledTonalButton(onClick = invite) {
-                        Icon(Icons.Outlined.QrCode2, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                    FilledTonalButton(onClick = invite, contentPadding = PaddingValues(horizontal = 16.dp)) {
                         Text(stringResource(R.string.invite))
                     }
                 }

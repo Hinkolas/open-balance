@@ -341,7 +341,7 @@ private fun SideStep(ui: GroupUi, draft: PaymentDraft, side: Side, isLast: Boole
             }
             add { RestMenu(ui, members) { m -> setForm(form.copy(text = form.text - m, rest = m)) } }
         }
-        section("members", rows = rows, footer = status?.let { (text, ok) -> { SectionFooter(text, if (ok) Brand.positive else Brand.negative) } })
+        section("members", rows = rows, gap = false, footer = status?.let { (text, ok) -> { SectionFooter(text, if (ok) Brand.positive else Brand.negative) } })
         if (isLast) draft.build(ui.state, ui.me, settleTitle)?.let { p -> result(ui, p) }
     }
 }

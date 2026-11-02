@@ -222,9 +222,9 @@ private fun Content(ui: GroupUi, r: PaymentRecord, padding: androidx.compose.fou
             }
         }
         val info = buildList<@Composable () -> Unit> {
-            add { ListItem(colors = listItemColors(), headlineContent = { Text(stringResource(R.string.added_by)) }, trailingContent = { Text(ui.name(r.creator)) }) }
+            add { ListItem(colors = listItemColors(), headlineContent = { Text(stringResource(R.string.added_by)) }, trailingContent = { Text(ui.name(r.creator), style = MaterialTheme.typography.bodyLarge) }) }
             r.lastEditor?.let { editor ->
-                add { ListItem(colors = listItemColors(), headlineContent = { Text(stringResource(R.string.last_edited_by)) }, trailingContent = { Text(ui.name(editor)) }) }
+                add { ListItem(colors = listItemColors(), headlineContent = { Text(stringResource(R.string.last_edited_by)) }, trailingContent = { Text(ui.name(editor), style = MaterialTheme.typography.bodyLarge) }) }
             }
         }
         section(

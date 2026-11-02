@@ -32,7 +32,7 @@ of ciphertext and never sees names or amounts.
 | Clients | Native per platform, rewritten against `spec/vectors`. iOS: SwiftUI, iOS 26+, Swift 6. Android: Jetpack Compose, Material 3, Kotlin, Android 11+ (2026-11-02). Windows later | |
 | Language | German and English (String Catalogs), informal "du" in German | |
 | Design | Quitt's visual language (`docs/DESIGN.md`) | |
-| Name | Open Balance, slug `open-balance`, URL scheme `openbalance://` | |
+| Name | Open Balance, slug `open-balance`, URL scheme `openbalance://`. Under the icon on the home screen: Balance (iOS and Android); stores list Open Balance | |
 
 ## Repository layout
 
