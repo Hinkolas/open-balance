@@ -41,42 +41,28 @@
         }
       }
     },
+    "%@ · by %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · by %2$@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · von %2$@"
+          }
+        }
+      }
+    },
     "%@ · paid by %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · bezahlt von %2$@"
-          }
-        }
-      }
-    },
-    "%@ added “%@”" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat „%2$@“ eingetragen"
-          }
-        }
-      }
-    },
-    "%@ added %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat %2$@ hinzugefügt"
-          }
-        }
-      }
-    },
-    "%@ added another device" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat ein weiteres Gerät hinzugefügt"
           }
         }
       }
@@ -91,72 +77,12 @@
         }
       }
     },
-    "%@ confirmed money arrived at %@ for “%@”" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat bestätigt, dass Geld bei %2$@ angekommen ist (für „%3$@“)"
-          }
-        }
-      }
-    },
-    "%@ created a QR code for another device" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat einen QR-Code für ein weiteres Gerät erstellt"
-          }
-        }
-      }
-    },
-    "%@ created the group" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat die Gruppe erstellt"
-          }
-        }
-      }
-    },
-    "%@ deleted “%@”" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat „%2$@“ gelöscht"
-          }
-        }
-      }
-    },
-    "%@ edited “%@”" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat „%2$@“ bearbeitet"
-          }
-        }
-      }
-    },
     "%@ gets" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ bekommt"
-          }
-        }
-      }
-    },
-    "%@ joined" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ ist beigetreten"
           }
         }
       }
@@ -227,66 +153,6 @@
         }
       }
     },
-    "%@ removed a confirmed arrival" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat einen bestätigten Eingang entfernt"
-          }
-        }
-      }
-    },
-    "%@ renamed a member to %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat ein Mitglied in %2$@ umbenannt"
-          }
-        }
-      }
-    },
-    "%@ renamed the group to %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat die Gruppe in %2$@ umbenannt"
-          }
-        }
-      }
-    },
-    "%@ renewed the invite of %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat die Einladung von %2$@ erneuert"
-          }
-        }
-      }
-    },
-    "%@ revoked a device QR code of %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat einen Geräte-QR-Code von %2$@ zurückgezogen"
-          }
-        }
-      }
-    },
-    "%@ revoked a QR code for another device" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat einen QR-Code für ein weiteres Gerät zurückgezogen"
-          }
-        }
-      }
-    },
     "%@ sent, waiting for confirmation" : {
       "localizations" : {
         "de" : {
@@ -303,16 +169,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ zu viel."
-          }
-        }
-      }
-    },
-    "%@ wrote an event this app doesn't know (%@)" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ hat einen Eintrag geschrieben, den diese App nicht kennt (%2$@)"
           }
         }
       }
@@ -337,12 +193,12 @@
         }
       }
     },
-    "a payment" : {
+    "A payment" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "eine Zahlung"
+            "value" : "Eine Zahlung"
           }
         }
       }
@@ -417,12 +273,32 @@
         }
       }
     },
+    "Added another device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiteres Gerät hinzugefügt"
+          }
+        }
+      }
+    },
     "Added by" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eingetragen von"
+          }
+        }
+      }
+    },
+    "Added by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von %@ hinzugefügt"
           }
         }
       }
@@ -477,6 +353,16 @@
         }
       }
     },
+    "Arrival removed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingang von %@ entfernt"
+          }
+        }
+      }
+    },
     "Arrivals" : {
       "localizations" : {
         "de" : {
@@ -503,6 +389,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Angekommen bei %@"
+          }
+        }
+      }
+    },
+    "Arrived at %@ · confirmed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angekommen bei %1$@ · von %2$@ bestätigt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arrived at %1$@ · confirmed by %2$@"
           }
         }
       }
@@ -707,6 +609,26 @@
         }
       }
     },
+    "Deleted by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von %@ gelöscht"
+          }
+        }
+      }
+    },
+    "Device QR code revoked by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geräte-QR-Code von %@ zurückgezogen"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "de" : {
@@ -753,6 +675,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zahlung bearbeiten"
+          }
+        }
+      }
+    },
+    "Edited by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von %@ bearbeitet"
+          }
+        }
+      }
+    },
+    "Encrypted with a key this device doesn't have" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit einem Schlüssel verschlüsselt, den dieses Gerät nicht hat"
           }
         }
       }
@@ -907,12 +849,32 @@
         }
       }
     },
+    "Group created by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe von %@ erstellt"
+          }
+        }
+      }
+    },
     "Group name" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Name der Gruppe"
+          }
+        }
+      }
+    },
+    "Group renamed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe von %@ umbenannt"
           }
         }
       }
@@ -1237,6 +1199,16 @@
         }
       }
     },
+    "New invite from %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Einladung von %@"
+          }
+        }
+      }
+    },
     "Next" : {
       "localizations" : {
         "de" : {
@@ -1484,6 +1456,16 @@
         }
       }
     },
+    "QR code for another device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR-Code für ein weiteres Gerät"
+          }
+        }
+      }
+    },
     "Received by" : {
       "localizations" : {
         "de" : {
@@ -1560,6 +1542,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mitglied umbenennen"
+          }
+        }
+      }
+    },
+    "Renamed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von %@ umbenannt"
           }
         }
       }
@@ -1720,6 +1712,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Signatur passt nicht zum Autor"
+          }
+        }
+      }
+    },
+    "someone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jemandem"
           }
         }
       }
@@ -1948,6 +1950,16 @@
         }
       }
     },
+    "Today" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heute"
+          }
+        }
+      }
+    },
     "Total" : {
       "localizations" : {
         "de" : {
@@ -2004,6 +2016,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unbekanntes Datum"
+          }
+        }
+      }
+    },
+    "Unknown event" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbekannter Eintrag"
           }
         }
       }
@@ -2144,6 +2166,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mit dem Admin-Token eines Servers kann dieses Gerät dort Gruppen erstellen. Zugriff auf Inhalte einer Gruppe gibt das Token nie."
+          }
+        }
+      }
+    },
+    "Yesterday" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestern"
+          }
+        }
+      }
+    },
+    "you" : {
+      "comment" : "After “by”, “from” or “at”. German: dir",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dir"
           }
         }
       }

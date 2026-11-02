@@ -17,7 +17,7 @@ struct HistoryView: View {
                 ContentUnavailableView("Nothing yet", systemImage: "clock", description: Text("Everything that happens in the group shows up here."))
             }
             ForEach(days.keys.sorted(by: >), id: \.self) { day in
-                Section(day == .distantPast ? String(localized: "Unknown date") : day.formatted(date: .complete, time: .omitted)) {
+                Section(dayTitle(day)) {
                     ForEach(days[day] ?? []) { row($0) }
                 }
             }
@@ -30,78 +30,112 @@ struct HistoryView: View {
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
     }
 
+    private func dayTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if day == .distantPast { return String(localized: "Unknown date") }
+        if calendar.isDateInToday(day) { return String(localized: "Today") }
+        if calendar.isDateInYesterday(day) { return String(localized: "Yesterday") }
+        let sameYear = calendar.isDate(day, equalTo: .now, toGranularity: .year)
+        return day.formatted(sameYear ? .dateTime.weekday(.wide).day().month(.wide) : .dateTime.weekday(.wide).day().month(.wide).year())
+    }
+
     @ViewBuilder private func row(_ item: HistoryItem) -> some View {
-        let content = HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(sentence(item))
-                    .foregroundStyle(item.rejection == nil ? .primary : .secondary)
-                    .strikethrough(item.rejection != nil)
-                HStack(spacing: 6) {
-                    Text(Dates.timestamp(item.at)?.formatted(date: .omitted, time: .shortened) ?? "–")
-                    if let r = item.rejection {
-                        Text("Ignored: \(reason(r))").foregroundStyle(Theme.negative)
-                    }
-                    if item.pending { StatusBadge(String(localized: "Not synced yet")) }
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            if let amount = amount(item) {
-                Amount(session.money(amount), tone: item.rejection == nil ? .neutral : .pending)
-            }
-        }
-        if let pid = paymentID(item), item.rejection == nil, session.state.payments[pid] != nil {
-            NavigationLink(value: PaymentRoute(id: pid)) { content }
+        let entry = entry(item)
+        let row = HistoryRow(entry: entry, time: Dates.timestamp(item.at)?.formatted(date: .omitted, time: .shortened) ?? "–",
+                             rejection: item.rejection.map(reason), pending: item.pending, money: { session.money($0) })
+        if let pid = entry.payment, item.rejection == nil, session.state.payments[pid] != nil {
+            NavigationLink(value: PaymentRoute(id: pid)) { row }
         } else {
-            content
+            row
         }
     }
 
-    private func paymentID(_ item: HistoryItem) -> PaymentID? {
-        switch item.data {
-        case .paymentCreated(let p), .paymentUpdated(let p): p.id
-        case .paymentDeleted(let d): d.id
-        case .arrivalRecorded(let a): a.payment
-        default: nil
-        }
+    // MARK: Entries
+
+    /// Who did it, for "… by %@" / "… from %@": "you" for yourself.
+    private func by(_ item: HistoryItem) -> String {
+        guard let author = item.author else { return String(localized: "someone") }
+        if author == session.me { return String(localized: "you", comment: "After “by”, “from” or “at”. German: dir") }
+        return session.state.members[author]?.name ?? String(localized: "someone")
     }
 
-    private func amount(_ item: HistoryItem) -> Int? {
-        switch item.data {
-        case .paymentCreated(let p), .paymentUpdated(let p): p.amount
-        case .arrivalRecorded(let a): a.amount
-        default: nil
-        }
+    private func memberName(_ id: MemberID) -> String {
+        session.state.members[id]?.name ?? String(localized: "Unknown member")
     }
 
-    private func title(_ id: PaymentID) -> String {
-        session.state.payments[id]?.payment.title ?? String(localized: "a payment")
+    private func member(_ id: MemberID) -> EventIcon.Subject {
+        .initial(session.state.members[id]?.initial ?? "?")
     }
 
-    private func sentence(_ item: HistoryItem) -> String {
-        // Real names, not "You": the sentences conjugate for a third person.
-        let who = item.author.flatMap { session.state.members[$0]?.name } ?? String(localized: "Someone")
+    private func payment(_ id: PaymentID) -> Payment? { session.state.payments[id]?.payment }
+
+    /// A settle up is about who paid whom; its title is just the form's name.
+    private func title(_ p: Payment) -> String {
+        guard p.displayKind == .settlement else { return p.title }
+        let from = p.out.lines.first { $0.amount > 0 }?.member
+        let to = p.in.lines.first { $0.amount > 0 }?.member
+        return "\(session.name(from)) → \(session.name(to))"
+    }
+
+    private func entry(_ item: HistoryItem) -> HistoryEntry {
+        let by = by(item)
         switch item.data {
-        case .groupCreated(let d): return String(localized: "\(d.admin.name) created the group")
-        case .groupUpdated(let d): return String(localized: "\(who) renamed the group to \(d.name)")
-        case .memberAdded(let d): return String(localized: "\(who) added \(d.name)")
-        case .memberInviteRenewed(let d): return String(localized: "\(who) renewed the invite of \(session.state.members[d.id]?.name ?? "")")
-        case .memberClaimed(let d): return String(localized: "\(session.state.members[d.id]?.name ?? "") joined")
-        case .memberUpdated(let d): return String(localized: "\(who) renamed a member to \(d.name)")
-        case .memberDeviceInvited: return String(localized: "\(who) created a QR code for another device")
-        case .memberDeviceClaimed: return String(localized: "\(who) added another device")
+        case .groupCreated(let d):
+            return .init(subject: .symbol("person.3"), title: d.name,
+                         detail: String(localized: "Group created by \(item.author == session.me ? by : d.admin.name)"))
+        case .groupUpdated(let d):
+            return .init(subject: .symbol("person.3"), badge: "pencil", badgeColor: .gray, title: d.name,
+                         detail: String(localized: "Group renamed by \(by)"))
+        case .memberAdded(let d):
+            return .init(subject: member(d.id), title: memberName(d.id),
+                         detail: String(localized: "Added by \(by)"))
+        case .memberInviteRenewed(let d):
+            return .init(subject: member(d.id), badge: "qrcode", badgeColor: .gray, title: memberName(d.id),
+                         detail: String(localized: "New invite from \(by)"))
+        case .memberClaimed(let d):
+            return .init(subject: member(d.id), badge: "checkmark", badgeColor: Theme.positive, title: memberName(d.id),
+                         detail: String(localized: "Joined"))
+        case .memberUpdated(let d):
+            return .init(subject: member(d.id), badge: "pencil", badgeColor: .gray, title: d.name,
+                         detail: String(localized: "Renamed by \(by)"))
+        case .memberDeviceInvited(let d):
+            return .init(subject: member(d.id), badge: "qrcode", badgeColor: .gray, title: memberName(d.id),
+                         detail: String(localized: "QR code for another device"))
+        case .memberDeviceClaimed(let d):
+            return .init(subject: member(d.id), badge: "iphone", badgeColor: Theme.positive, title: memberName(d.id),
+                         detail: String(localized: "Added another device"))
         case .memberDeviceInviteRevoked(let d):
-            return d.id == item.author
-                ? String(localized: "\(who) revoked a QR code for another device")
-                : String(localized: "\(who) revoked a device QR code of \(session.state.members[d.id]?.name ?? "")")
-        case .paymentCreated(let p): return String(localized: "\(who) added “\(p.title)”")
-        case .paymentUpdated(let p): return String(localized: "\(who) edited “\(p.title)”")
-        case .paymentDeleted(let d): return String(localized: "\(who) deleted “\(title(d.id))”")
-        case .arrivalRecorded(let a): return String(localized: "\(who) confirmed money arrived at \(session.state.members[a.member]?.name ?? "") for “\(title(a.payment))”")
-        case .arrivalRemoved: return String(localized: "\(who) removed a confirmed arrival")
-        case .unsupported(let t): return String(localized: "\(who) wrote an event this app doesn't know (\(t))")
-        case nil: return String(localized: "Unreadable event")
+            return .init(subject: member(d.id), badge: "xmark", badgeColor: Theme.negative, title: memberName(d.id),
+                         detail: String(localized: "Device QR code revoked by \(by)"))
+        case .paymentCreated(let p):
+            return .init(subject: .symbol(p.displayKind.symbol), title: title(p),
+                         detail: String(localized: "\(p.displayKind.label) · by \(by)"), amount: p.amount, payment: p.id)
+        case .paymentUpdated(let p):
+            return .init(subject: .symbol(p.displayKind.symbol), badge: "pencil", badgeColor: .gray, title: title(p),
+                         detail: String(localized: "Edited by \(by)"), amount: p.amount, payment: p.id)
+        case .paymentDeleted(let d):
+            let p = payment(d.id)
+            return .init(subject: .symbol(p?.displayKind.symbol ?? "doc"), badge: "trash", badgeColor: Theme.negative,
+                         title: p.map(title) ?? String(localized: "A payment"),
+                         detail: String(localized: "Deleted by \(by)"), amount: p?.amount, tone: .pending, payment: d.id)
+        case .arrivalRecorded(let a):
+            let p = payment(a.payment)
+            let at = a.member == session.me ? String(localized: "you", comment: "After “by”, “from” or “at”. German: dir") : memberName(a.member)
+            let detail = item.author == a.member
+                ? String(localized: "Arrived at \(at)")
+                : String(localized: "Arrived at \(at) · confirmed by \(by)")
+            return .init(subject: .symbol(p?.displayKind.symbol ?? "doc"), badge: "checkmark", badgeColor: Theme.positive,
+                         title: p.map(title) ?? String(localized: "A payment"), detail: detail, amount: a.amount, tone: .positive, payment: a.payment)
+        case .arrivalRemoved(let d):
+            let arrival = session.state.arrivals[d.id]
+            let p = arrival.flatMap { payment($0.payment) }
+            return .init(subject: .symbol(p?.displayKind.symbol ?? "doc"), badge: "minus", badgeColor: Theme.negative,
+                         title: p.map(title) ?? String(localized: "A payment"),
+                         detail: String(localized: "Arrival removed by \(by)"), amount: arrival?.amount, tone: .pending, payment: arrival?.payment)
+        case .unsupported(let t):
+            return .init(subject: .symbol("questionmark"), title: String(localized: "Unknown event"), detail: t)
+        case nil:
+            return .init(subject: .symbol("lock"), title: String(localized: "Unreadable event"), detail: String(localized: "Encrypted with a key this device doesn't have"))
         }
     }
 
@@ -119,5 +153,71 @@ struct HistoryView: View {
         case .alreadyClaimed: String(localized: "member already joined")
         case .badInviteSig: String(localized: "invite doesn't match")
         }
+    }
+}
+
+/// What a history row shows; built from one ledger event.
+struct HistoryEntry {
+    var subject: EventIcon.Subject
+    var badge: String?
+    var badgeColor: Color = Theme.tint
+    var title: String
+    var detail: String
+    var amount: Int?
+    var tone: AmountTone = .neutral
+    var payment: PaymentID?
+}
+
+/// One ledger event: icon, what it is about, what happened and by whom, and
+/// the amount and time on the trailing side. One line each so long titles
+/// truncate instead of wrapping, more at accessibility text sizes.
+struct HistoryRow: View {
+    let entry: HistoryEntry
+    let time: String
+    let rejection: String?
+    let pending: Bool
+    let money: (Int) -> String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let ignored = rejection != nil
+        let lines = typeSize.isAccessibilitySize ? 3 : 1
+        HStack(spacing: 14) {
+            EventIcon(entry.subject, badge: ignored ? "exclamationmark" : entry.badge,
+                      badgeColor: ignored ? Theme.negative : entry.badgeColor, muted: ignored)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(entry.title)
+                        .lineLimit(lines)
+                        .strikethrough(ignored)
+                        .foregroundStyle(ignored ? .secondary : .primary)
+                    Spacer(minLength: 0)
+                    if let amount = entry.amount {
+                        Amount(money(amount), tone: ignored ? .pending : entry.tone)
+                            .fixedSize()
+                    }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(rejection.map { String(localized: "Ignored: \($0)") } ?? entry.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(ignored ? AnyShapeStyle(Theme.negative) : AnyShapeStyle(.secondary))
+                        .lineLimit(lines)
+                    Spacer(minLength: 0)
+                    Group {
+                        if pending {
+                            Label("Not synced yet", systemImage: "arrow.triangle.2.circlepath")
+                                .labelStyle(.iconOnly)
+                        } else {
+                            Text(time)
+                        }
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                }
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -130,3 +130,70 @@ public struct StatusBadge: View {
             .background(color.opacity(0.14), in: Capsule())
     }
 }
+
+/// The leading icon of a history row: what the entry is about (a payment
+/// kind's symbol on the tint, or a member's initial) with a small badge for
+/// what happened to it (added, edited, deleted, arrived …).
+public struct EventIcon: View {
+    public enum Subject: Sendable, Equatable {
+        case symbol(String)
+        case initial(String)
+    }
+
+    let subject: Subject
+    let badge: String?
+    let badgeColor: Color
+    let muted: Bool
+    @ScaledMetric private var size: CGFloat = 36
+
+    public init(_ subject: Subject, badge: String? = nil, badgeColor: Color = Theme.tint, muted: Bool = false) {
+        self.subject = subject
+        self.badge = badge
+        self.badgeColor = badgeColor
+        self.muted = muted
+    }
+
+    public var body: some View {
+        main
+            .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                if let badge {
+                    Image(systemName: badge)
+                        .font(.caption2.weight(.bold))
+                        .imageScale(.small)
+                        .foregroundStyle(.white)
+                        .frame(width: size * 0.48, height: size * 0.48)
+                        .background(muted ? AnyShapeStyle(.gray) : AnyShapeStyle(badgeColor), in: Circle())
+                        .overlay(Circle().strokeBorder(Self.cellBackground, lineWidth: 2).padding(-2))
+                        .offset(x: size * 0.12, y: size * 0.12)
+                }
+            }
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var main: some View {
+        switch subject {
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.body.weight(.medium))
+                .foregroundStyle(muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.tint))
+                .frame(width: size, height: size)
+                .background(muted ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Theme.tint.opacity(0.15)), in: Circle())
+        case .initial(let initial):
+            Text(initial)
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .foregroundStyle(muted ? .secondary : .primary)
+                .frame(width: size, height: size)
+                .background(.quaternary, in: Circle())
+        }
+    }
+
+    /// The badge's ring matches the list row behind it.
+    private static var cellBackground: Color {
+        #if os(iOS)
+        Color(uiColor: .secondarySystemGroupedBackground)
+        #else
+        Color(nsColor: .controlBackgroundColor)
+        #endif
+    }
+}
