@@ -140,7 +140,7 @@ struct PaymentDetailView: View {
             }
             if p.track, line.amount > 0 {
                 ProgressView(value: Double(held), total: Double(line.amount))
-                    .tint(held == line.amount ? Theme.positive : Theme.tint)
+                    .tint(Theme.positive)
                 if !deleted, held < line.amount, session.canRecordArrival(for: line.member) {
                     Button(line.member == session.me ? String(localized: "Confirm what arrived") : String(localized: "Confirm for \(session.name(line.member))"),
                            systemImage: "checkmark.circle") {

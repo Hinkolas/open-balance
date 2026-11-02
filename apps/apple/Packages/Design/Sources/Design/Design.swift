@@ -176,7 +176,7 @@ public struct StatusBadge: View {
 }
 
 /// The leading icon of a history row: what the entry is about (a payment
-/// kind's symbol on the tint, or a member's initial) with a small badge for
+/// kind's symbol or a member's initial, both grey) with a small badge for
 /// what happened to it (added, edited, deleted, arrived …).
 public struct EventIcon: View {
     public enum Subject: Sendable, Equatable {
@@ -220,9 +220,9 @@ public struct EventIcon: View {
         case .symbol(let name):
             Image(systemName: name)
                 .font(.body.weight(.medium))
-                .foregroundStyle(muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.tint))
+                .foregroundStyle(muted ? .tertiary : .secondary)
                 .frame(width: size, height: size)
-                .background(muted ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Theme.tint.opacity(0.15)), in: Circle())
+                .background(.quaternary, in: Circle())
         case .initial(let initial):
             Text(initial)
                 .font(.system(.subheadline, design: .rounded, weight: .semibold))

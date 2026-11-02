@@ -251,7 +251,7 @@ struct PaymentRow: View {
         HStack(spacing: 12) {
             Image(systemName: p.displayKind.symbol)
                 .font(.body)
-                .foregroundStyle(Theme.tint)
+                .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title(p)).lineLimit(1)

@@ -167,7 +167,7 @@ struct SettleView: View {
                     .foregroundStyle(.secondary)
             }
         } icon: {
-            Image(systemName: "hourglass").foregroundStyle(Theme.tint)
+            Image(systemName: "hourglass").foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
     }

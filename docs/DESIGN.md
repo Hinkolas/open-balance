@@ -40,9 +40,9 @@ both first-class and follow the system.
   confirmation". A notice at the top explains when the plan counts money
   still on its way; the pending payments are listed under Still expected.
 - **History** groups the ledger by day (Today, Yesterday, then dates) with
-  one structured row per event: an `EventIcon` (payment kind symbol on the
-  tint, or the member's initial) with a small badge only when something
-  changed (edited, deleted, arrived, joined, device, revoked), the payment
+  one structured row per event: an `EventIcon` (payment kind symbol or the
+  member's initial, both grey so only badges and amounts carry green and
+  red) with a small badge only when something changed (edited, deleted, arrived, joined, device, revoked), the payment
   title or member name, "what · by whom" below, and amount and time
   trailing. Each line is one line and truncates instead of wrapping (more at
   accessibility sizes). Settle ups are titled "From → To". Ignored events
