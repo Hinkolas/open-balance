@@ -122,7 +122,7 @@ extension Payment.Kind {
     var symbol: String {
         switch self {
         case .income: "arrow.down.circle"
-        case .expense: "cart"
+        case .expense: "arrow.up.circle"
         case .settlement: "arrow.left.arrow.right"
         }
     }
