@@ -75,9 +75,11 @@ xcrun simctl keychain booted add-root-cert /tmp/skali-dev-ca.pem
 ```
 
 In the app: **Create a group → Add server** with
-`https://open-balance.localhost` and the `ADMIN_TOKEN` from `.env`. Then add
-a member and copy the invite link; on a second simulator or device, **Join
-with an invite** and paste it.
+`https://open-balance.localhost` and the `ADMIN_TOKEN` from `.env`, and save
+the recovery kit it shows. Then add a member and copy the invite link; on a
+second simulator or device, **Join with an invite** and paste it. To let
+someone else create a group, open the server under **Group → Servers you
+own → Let someone create a group** and send them that link.
 
 ## Staging
 

@@ -121,7 +121,7 @@ full-screen task screens instead of sheets, bottom sheets for small tasks.
   these in `ledger.json` and tighten both.
 - QR: generated and scanned with ZXing (CameraX preview), no Google Play
   services. Invite links also open from the system camera app
-  (`openbalance://join` intent filter).
+  (`openbalance://join`, `recover` and `create` intent filters).
 - Showing an invite or device QR asks for the fingerprint, face or screen
   lock (BiometricPrompt), like Face ID on iOS.
 - Release builds allow HTTPS only; debug builds also plain HTTP.

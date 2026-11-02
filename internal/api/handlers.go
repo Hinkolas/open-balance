@@ -532,7 +532,8 @@ func (s *Server) readEvents(w http.ResponseWriter, r *http.Request, c caller) {
 	writeJSON(w, http.StatusOK, map[string]any{"events": out, "head": head})
 }
 
-// stream sends `event: head` whenever the group's head moves, and every 30 s.
+// stream sends `event: head` whenever the group's head moves, and every 30 s,
+// for as long as the caller's key stays active.
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, c caller) {
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -543,6 +544,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c caller) {
 	updates, cancel := s.hub.Subscribe(c.group)
 	defer cancel()
 	send := func() bool {
+		// A key removed while the stream is open stops getting heads.
+		if k, err := s.q.GetKey(r.Context(), store.GetKeyParams{GroupID: c.group, PublicKey: c.key}); err != nil || k.Status != "active" {
+			return false
+		}
 		head, err := s.q.GetHead(r.Context(), c.group)
 		if err != nil {
 			return false

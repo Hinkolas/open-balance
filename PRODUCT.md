@@ -38,7 +38,12 @@ counts once its arrival is confirmed, instalment by instalment.
 - Joining is by a per-member invite QR code the admin shows; no accounts.
   Several people can share one member (e.g. a company's partners): any
   device of the member shows a one-time QR for a further device.
-- The server owner (admin token) creates groups; the group creator is admin.
+- The server owner (admin token) creates groups or hands out one-time
+  creation links; the group creator is admin. Running a server never gives
+  access to a group's contents.
+- Keys never leave the device. A lost device is removed from another one;
+  a member who lost every device is reset by the admin; the admin keeps a
+  recovery kit (a link) in a password manager.
 
 ## Capabilities and Constraints
 

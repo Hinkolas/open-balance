@@ -301,6 +301,33 @@ func TestStreamWakesOnAppend(t *testing.T) {
 	wait(`"seq": 1`)
 }
 
+// A stream ends once its key is removed.
+func TestStreamEndsForRemovedKey(t *testing.T) {
+	srv := testServer(t)
+	f := newGroup(t, client{t, srv})
+	phone := f.claim(f.invite(f.admin, "admin"))
+	path := f.g + "/stream"
+	req, _ := http.NewRequest("GET", srv.URL+path, nil)
+	req.Header.Set("Authorization", protocol.AuthHeader(phone, "GET", path, time.Now().Unix(), nil))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	done := make(chan struct{})
+	go func() {
+		io.Copy(io.Discard, res.Body)
+		close(done)
+	}()
+	expectStatus(t, "remove the streaming key", f.remove(f.admin, phone), 204)
+	f.c.do("POST", f.g+"/events", f.admin, false, map[string]any{"events": []any{map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(1)}}})
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream still open 5s after its key was removed")
+	}
+}
+
 func expectStatus(t *testing.T, what string, got, want int) {
 	t.Helper()
 	if got != want {
