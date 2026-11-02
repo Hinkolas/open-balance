@@ -88,7 +88,9 @@ servers), and a separate **+**.
 - Offline-first: writes go to an outbox with client ids and apply
   optimistically; the ledger cache is local (SQLite via GRDB); state is
   rebuilt in memory.
-- Face ID lock: optional, roadmap.
+- Showing an invite or device QR asks for Face ID, Touch ID or the passcode
+  first (it hands out the group secret). App lock is the system's own
+  "Require Face ID" (iOS 18+); the group settings point to it. (2026-11-02)
 
 ## Phases
 
@@ -120,7 +122,6 @@ servers), and a separate **+**.
 - Encrypted snapshots for long ledgers; encrypted attachments (receipt photos)
   in a bucket.
 - Push notifications ("group changed", no content) via APNs.
-- Face ID lock.
 - Android, Windows (and macOS via the Apple target).
 - Payment handoff from Quitt: IBAN / PayPal.me inside the encrypted ledger,
   EPC QR on Settle up.

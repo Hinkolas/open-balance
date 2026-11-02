@@ -1756,12 +1756,32 @@
         }
       }
     },
+    "Show a QR code that lets another device write as you." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einen QR-Code anzeigen, mit dem ein anderes Gerät als du schreiben kann."
+          }
+        }
+      }
+    },
     "Show all in History" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle in der Historie anzeigen"
+          }
+        }
+      }
+    },
+    "Show an invite that lets someone join this group." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Einladung anzeigen, mit der jemand der Gruppe beitreten kann."
           }
         }
       }
@@ -1996,6 +2016,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zum Beitreten: Bitte den Admin der Gruppe, dich hinzuzufügen und dir deinen Einladungs-QR-Code zu zeigen."
+          }
+        }
+      }
+    },
+    "To lock Balance with Face ID, touch and hold its icon on the Home Screen and choose Require Face ID." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um Balance mit Face ID zu sperren, halte das App-Symbol auf dem Home-Bildschirm gedrückt und wähle „Face ID anfordern“."
           }
         }
       }

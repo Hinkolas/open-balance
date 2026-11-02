@@ -56,6 +56,8 @@ struct GroupView: View {
             }
             Section {
                 Button("Remove from this device", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmLeave = true }
+            } footer: {
+                Text("To lock Balance with Face ID, touch and hold its icon on the Home Screen and choose Require Face ID.")
             }
         }
         .listStyle(.insetGrouped)
@@ -133,6 +135,7 @@ struct GroupView: View {
 
     private func showDeviceInvite() {
         Task {
+            guard await DeviceOwner.confirm(String(localized: "Show a QR code that lets another device write as you.")) else { return }
             do {
                 deviceInvite = try await session.addDevice()
             } catch {
@@ -142,12 +145,13 @@ struct GroupView: View {
     }
 
     private func showInvite(_ member: MemberID) {
-        if let link = session.inviteLink(for: member) {
-            invite = link
-            return
-        }
-        // Created on another device: issue a fresh invite.
         Task {
+            guard await DeviceOwner.confirm(String(localized: "Show an invite that lets someone join this group.")) else { return }
+            if let link = session.inviteLink(for: member) {
+                invite = link
+                return
+            }
+            // Created on another device: issue a fresh invite.
             do {
                 invite = try await session.renewInvite(for: member)
             } catch {
@@ -259,6 +263,7 @@ struct AddMemberSheet: View {
         error = nil
         Task {
             defer { working = false }
+            guard await DeviceOwner.confirm(String(localized: "Show an invite that lets someone join this group.")) else { return }
             do {
                 link = try await session.addMember(name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100)))
             } catch {

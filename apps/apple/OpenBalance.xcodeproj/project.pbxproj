@@ -300,6 +300,7 @@
 				INFOPLIST_FILE = OpenBalance/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Confirms it's you before showing an invite QR code.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -335,6 +336,7 @@
 				INFOPLIST_FILE = OpenBalance/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Confirms it's you before showing an invite QR code.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
