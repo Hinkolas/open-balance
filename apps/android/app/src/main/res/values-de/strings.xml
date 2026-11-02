@@ -250,6 +250,8 @@
     <string name="counts_as_arrives">Zählt, sobald das Geld ankommt.</string>
     <string name="use_amount_or_percent" formatted="false">Erlaubt sind Beträge oder Prozente wie 15%.</string>
     <string name="percent">Prozent</string>
+    <string name="unit_amount">Betrag in %1$s</string>
+    <string name="switch_unit">Einheit wechseln</string>
     <string name="amount_or_percent" formatted="false">Betrag oder %</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d Änderung wartet</item>

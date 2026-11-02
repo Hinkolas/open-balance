@@ -8,6 +8,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +37,6 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.ListItem
@@ -350,12 +353,26 @@ private fun MemberField(
 ) {
     val field = form.field(m, currency)
     val preview = resolution.preview[m]
-    val text = form.text[m] ?: ""
-    val percentLabel = stringResource(R.string.percent)
-    // Keeps the cursor while the text is regrouped; follows the form when it changes elsewhere (rest chosen).
-    var edit by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
-    val shown = if (edit.text == text) edit else TextFieldValue(text, TextRange(text.length))
-    val placeholder = if ((resolution.usedFallback || resolution.restMember == m) && preview != null && preview > 0) Money.bare(preview, currency) else "0"
+    // The form keeps a percentage as "60%". The field shows only the number;
+    // the button next to it is the unit (€ or %) and switches between them.
+    val stored = form.text[m] ?: ""
+    val percent = stored.endsWith("%")
+    val number = stored.removeSuffix("%")
+    // Keeps the cursor while the number is regrouped; follows the form when it changes elsewhere (rest chosen).
+    var edit by remember { mutableStateOf(TextFieldValue(number, TextRange(number.length))) }
+    val shown = if (edit.text == number) edit else TextFieldValue(number, TextRange(number.length))
+    val placeholder = if (!percent && (resolution.usedFallback || resolution.restMember == m) && preview != null && preview > 0) Money.bare(preview, currency) else "0"
+    val unitLabel = if (percent) stringResource(R.string.percent) else stringResource(R.string.unit_amount, ui.currencySymbol)
+    val switchLabel = stringResource(R.string.switch_unit)
+
+    fun commit(value: TextFieldValue, asPercent: Boolean) {
+        edit = value
+        // Typing a number takes the rest away from this member; switching the unit alone doesn't.
+        val clearsRest = form.rest == m && value.text.isNotBlank()
+        val text = value.text + if (asPercent) "%" else ""
+        onChange(form.copy(text = form.text + (m to text), rest = if (clearsRest) null else form.rest))
+    }
+
     ListItem(
         colors = listItemColors(),
         leadingContent = { MemberAvatar(ui.initial(m), isMe = m == ui.me) },
@@ -367,39 +384,33 @@ private fun MemberField(
             else -> null
         },
         trailingContent = {
-            // The numeric pad has no "%", so a toggle in the field adds or removes it.
-            val percent = shown.text.endsWith("%")
-            fun commit(v: TextFieldValue) {
-                edit = v
-                val clearsRest = form.rest == m && v.text.isNotBlank()
-                onChange(form.copy(text = form.text + (m to v.text), rest = if (clearsRest) null else form.rest))
-            }
             OutlinedTextField(
                 value = shown,
                 onValueChange = { raw ->
-                    // Amounts group as you type; a percentage keeps its "%" at the end.
-                    val old = shown.text.removeSuffix("%")
-                    val typed = raw.text.replace("%", "")
-                    val cursor = raw.selection.start.coerceAtMost(typed.length)
-                    val v = AmountTyping.next(old, typed, cursor, currency)
-                        ?.let { TextFieldValue(it.text, TextRange(it.cursor)) } ?: TextFieldValue(typed, TextRange(cursor))
-                    commit(if (percent) v.copy(text = v.text + "%") else v)
+                    // Amounts group as you type ("20.000").
+                    val v = AmountTyping.next(shown.text, raw.text, raw.selection.start, currency)
+                        ?.let { TextFieldValue(it.text, TextRange(it.cursor)) } ?: return@OutlinedTextField
+                    commit(v, percent)
                 },
                 placeholder = { Text(placeholder, style = AmountType.row, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) },
                 textStyle = AmountType.row.copy(textAlign = TextAlign.End),
                 singleLine = true,
                 isError = field == SplitForm.Field.Invalid,
                 trailingIcon = {
-                    IconToggleButton(
-                        checked = percent,
-                        onCheckedChange = { on ->
-                            val base = shown.text.removeSuffix("%")
-                            val text = if (on) "$base%" else base
-                            commit(TextFieldValue(text, TextRange(base.length)))
-                        },
-                        modifier = Modifier.semantics { contentDescription = percentLabel },
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable(onClickLabel = switchLabel) { commit(shown, !percent) }
+                            .semantics { contentDescription = unitLabel },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text("%", style = MaterialTheme.typography.titleMedium, color = if (percent) Brand.tint else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            if (percent) "%" else ui.currencySymbol,
+                            style = AmountType.rowStrong,
+                            color = Brand.tint,
+                            maxLines = 1,
+                        )
                     }
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = if (last) ImeAction.Done else ImeAction.Next),
