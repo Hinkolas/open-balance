@@ -76,6 +76,7 @@ object LedgerCrypto {
     private const val LABEL_CHAIN = "open-balance/v1/chain"
     private const val LABEL_REQ = "open-balance/v1/req\n"
     private const val LABEL_CLAIM = "open-balance/v1/claim"
+    private const val LABEL_RECOVER = "open-balance/v1/recover"
 
     class Failure(message: String) : Exception(message)
 
@@ -165,6 +166,9 @@ object LedgerCrypto {
      * proof), invite key over the member key (ledger inviteSig).
      */
     fun claimInput(groupId: UUID, key: ByteArray): ByteArray = LABEL_CLAIM.toByteArray() + groupId.bytes + key
+
+    /** Signed by the recovery key for the admin's new device key (§3.4). */
+    fun recoverInput(groupId: UUID, key: ByteArray): ByteArray = LABEL_RECOVER.toByteArray() + groupId.bytes + key
 
     fun requestSigningInput(method: String, pathAndQuery: String, ts: Long, body: ByteArray): ByteArray =
         "$LABEL_REQ$method\n$pathAndQuery\n$ts\n${sha256(body).hex}".toByteArray()

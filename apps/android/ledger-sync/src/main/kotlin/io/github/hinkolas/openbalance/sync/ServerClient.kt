@@ -48,10 +48,45 @@ class ServerClient(base: String, private val http: OkHttpClient = defaultHttp) {
 
     suspend fun info(): ServerInfo = json.decodeFromJsonElement(ServerInfo.serializer(), send("GET", "/v1/info", Auth.None))
 
-    suspend fun createGroup(ownerToken: String, groupId: UUID, adminKey: ByteArray) {
-        send("POST", "/v1/groups", Auth.Owner(ownerToken), buildJsonObject {
+    /** [token] is the server's ADMIN_TOKEN or a creation code (PROTOCOL.md §5.3). */
+    suspend fun createGroup(token: String, groupId: UUID, adminKey: ByteArray, recoveryKey: ByteArray) {
+        send("POST", "/v1/groups", Auth.Owner(token), buildJsonObject {
             put("groupId", groupId.lower)
             put("adminKey", adminKey.base64Url)
+            put("recoveryKey", recoveryKey.base64Url)
+        })
+    }
+
+    @Serializable
+    private data class CodeOut(val code: String, val expiresAt: String)
+
+    /** A one-time code that lets someone else create a group (server owner only). Returns the code and its expiry (RFC 3339). */
+    suspend fun createCreationCode(ownerToken: String, expiresInHours: Int = 168): Pair<String, String> {
+        val out = json.decodeFromJsonElement(
+            CodeOut.serializer(),
+            send("POST", "/v1/admin/creation-codes", Auth.Owner(ownerToken), buildJsonObject { put("expiresInHours", expiresInHours) }),
+        )
+        return out.code to out.expiresAt
+    }
+
+    /** Remove a member or admin key from the group (§5.3). */
+    suspend fun removeKey(signer: SigningKey, groupId: UUID, key: ByteArray) {
+        send("DELETE", "/v1/groups/${groupId.lower}/keys/${key.base64Url}", Auth.Key(signer))
+    }
+
+    /** Replace the group's recovery key (admin only). */
+    suspend fun replaceRecovery(signer: SigningKey, groupId: UUID, recoveryKey: ByteArray) {
+        send("PUT", "/v1/groups/${groupId.lower}/recovery", Auth.Key(signer), buildJsonObject {
+            put("recoveryKey", recoveryKey.base64Url)
+        })
+    }
+
+    /** Register [member] as the admin's only device, signed with the [recovery] key. */
+    suspend fun recover(recovery: SigningKey, member: SigningKey, groupId: UUID) {
+        val proof = member.sign(LedgerCrypto.claimInput(groupId, recovery.publicKey))
+        send("POST", "/v1/groups/${groupId.lower}/recover", Auth.Key(recovery), buildJsonObject {
+            put("memberKey", member.publicKey.base64Url)
+            put("proof", proof.base64Url)
         })
     }
 

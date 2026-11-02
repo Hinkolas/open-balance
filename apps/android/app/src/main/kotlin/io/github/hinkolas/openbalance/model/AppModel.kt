@@ -4,12 +4,16 @@ import android.app.Application
 import android.content.Context
 import androidx.core.content.edit
 import io.github.hinkolas.openbalance.R
+import io.github.hinkolas.openbalance.sync.AppLink
+import io.github.hinkolas.openbalance.sync.CreationLink
 import io.github.hinkolas.openbalance.sync.GroupSession
 import io.github.hinkolas.openbalance.sync.InviteLink
+import io.github.hinkolas.openbalance.sync.RecoveryLink
 import io.github.hinkolas.openbalance.sync.ServerClient
 import io.github.hinkolas.openbalance.sync.ServerOwnership
 import io.github.hinkolas.openbalance.sync.create
 import io.github.hinkolas.openbalance.sync.join
+import io.github.hinkolas.openbalance.sync.recover
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,8 +30,8 @@ import java.util.UUID
 
 /**
  * App-wide state: the groups on this device, which one is active, the
- * servers this device may create groups on, and invite links waiting for
- * the join screen.
+ * servers this device may create groups on, and links (invite, recovery,
+ * creation) waiting for their screen.
  */
 class AppModel(private val app: Application) {
     /** Sessions sync here, off the main thread. */
@@ -53,8 +57,8 @@ class AppModel(private val app: Application) {
     val active: StateFlow<GroupSession?> = combine(_sessions, activeId) { s, id -> s.firstOrNull { it.id == id } ?: s.firstOrNull() }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    /** An invite opened from a link or scanned, waiting for the join screen. */
-    val pendingInvite = MutableStateFlow<InviteLink?>(null)
+    /** A link opened from outside or scanned, waiting for the join or create screen. */
+    val pendingLink = MutableStateFlow<AppLink?>(null)
 
     /** A one-line message for the user, shown once. */
     val toast = MutableStateFlow<String?>(null)
@@ -109,13 +113,13 @@ class AppModel(private val app: Application) {
 
     // MARK: - Links
 
-    /** An `openbalance://join` link from a VIEW intent, a scan or the clipboard. */
+    /** An `openbalance://join`, `recover` or `create` link from a VIEW intent, a scan or the clipboard. */
     fun handle(url: String) {
-        val link = InviteLink.parse(url)
+        val link = AppLink.parse(url)
         if (link != null) {
-            pendingInvite.value = link
+            pendingLink.value = link
         } else {
-            toast.value = app.getString(R.string.not_an_invite_link)
+            toast.value = app.getString(R.string.not_an_app_link)
         }
     }
 
@@ -134,10 +138,42 @@ class AppModel(private val app: Application) {
         activate(session.id)
     }
 
-    suspend fun create(server: ServerOwnership, name: String, currency: String, myName: String) {
-        val session = GroupSession.create(server.server, server.token, name, currency, myName, credentials, cacheRoot, sessionScope)
+    /**
+     * Take over the admin's seat with a recovery kit. A group this device
+     * still has access to is just shown; one it was removed from is
+     * forgotten first.
+     */
+    suspend fun recover(link: RecoveryLink) {
+        _sessions.value.firstOrNull { it.id == link.groupId }?.let {
+            if (!it.isRemoved) {
+                activate(it.id)
+                return
+            }
+            forget(it)
+        }
+        val interrupted = withContext(Dispatchers.IO) {
+            credentials.all().firstOrNull { it.groupUuid == link.groupId && it.memberId == link.adminId && !it.registered }
+        }
+        val session = GroupSession.recover(link, interrupted, credentials, cacheRoot, sessionScope)
         _sessions.value = _sessions.value + session
         activate(session.id)
+    }
+
+    /**
+     * Create a group as its admin, with the server's admin token or a
+     * creation code. Returns the recovery kit to show once.
+     */
+    suspend fun create(server: String, token: String, name: String, currency: String, myName: String): RecoveryLink {
+        val (session, kit) = GroupSession.create(server, token, name, currency, myName, credentials, cacheRoot, sessionScope)
+        _sessions.value = _sessions.value + session
+        activate(session.id)
+        return kit
+    }
+
+    /** A one-time link (7 days) that lets someone else create a group on a server this device owns. */
+    suspend fun creationLink(server: ServerOwnership): CreationLink {
+        val (code, _) = ServerClient(server.server).createCreationCode(server.token)
+        return CreationLink(server.server, code)
     }
 
     /** Remove a group from this device. The ledger stays on the server. */
@@ -170,4 +206,6 @@ class AppModel(private val app: Application) {
 class Handoff {
     var draft: PaymentDraft? = null
     var invite: InviteLink? = null
+    var recoveryKit: RecoveryLink? = null
+    var creationLink: CreationLink? = null
 }

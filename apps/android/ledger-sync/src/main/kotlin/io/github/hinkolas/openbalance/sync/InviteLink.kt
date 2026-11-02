@@ -63,7 +63,7 @@ class InviteLink(
             return InviteLink(s, group, m.lowercase(), k, i)
         }
 
-        private fun pairs(text: String): List<Pair<String, String?>>? =
+        internal fun pairs(text: String): List<Pair<String, String?>>? =
             text.split('&').filter { it.isNotEmpty() }.map { item ->
                 val eq = item.indexOf('=')
                 if (eq < 0) {
@@ -74,7 +74,7 @@ class InviteLink(
             }
 
         /** Percent-decoding as in a URL query; "+" stays "+". Null for broken escapes. */
-        private fun decode(s: String): String? {
+        internal fun decode(s: String): String? {
             if ('%' !in s) return s
             val out = ByteArrayOutputStream()
             var i = 0
@@ -94,7 +94,7 @@ class InviteLink(
         }
 
         /** Percent-encode a query value, keeping ":" and "/" readable like the Swift client. */
-        private fun encode(s: String): String = buildString {
+        internal fun encode(s: String): String = buildString {
             for (b in s.toByteArray()) {
                 val c = b.toInt().toChar()
                 if (b >= 0 && (c.isLetterOrDigit() || c in "-._~:/@!$'()*,;?")) append(c) else append("%%%02X".format(b.toInt() and 0xFF))

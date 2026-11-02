@@ -26,9 +26,10 @@ class Fixture {
     val server = FakeServer()
     val ledger = Ledger(group, secret)
     val admin = Actor(group, secret)
+    val recovery = SigningKey.generate()
 
     init {
-        write(admin, EventData.GroupCreated(GroupCreatedData("Italien", "EUR", GroupCreatedData.Admin(admin.id, "Jonas", admin.pub.base64Url))))
+        write(admin, EventData.GroupCreated(GroupCreatedData("Italien", "EUR", GroupCreatedData.Admin(admin.id, "Jonas", admin.pub.base64Url), recovery.publicKey.base64Url)))
     }
 
     /** Write as [who], append, reduce; returns the rejection of that event. */
@@ -264,6 +265,113 @@ class LedgerTests {
         fresh.apply(f.server.events)
         assertEquals(f.ledger.state, fresh.state)
         assertNotNull(fresh.state.members[globex.id])
+    }
+
+    /** Removing devices and resetting a member (§7.3 member.device_removed). */
+    @Test
+    fun deviceRemoval() {
+        val f = Fixture()
+        val anna = f.join("Anna")
+        val ben = f.join("Ben")
+        val invite = SigningKey.generate()
+        assertNull(f.write(anna, EventData.MemberDeviceInvited(MemberDeviceInviteData(anna.id, invite.publicKey.base64Url))))
+        val phone = Actor(f.group, f.secret, id = anna.id)
+        val sig = invite.sign(LedgerCrypto.claimInput(f.group, phone.pub))
+        assertNull(f.write(phone, EventData.MemberDeviceClaimed(MemberDeviceClaimedData(anna.id, phone.pub.base64Url, invite.publicKey.base64Url, sig.base64Url))))
+
+        // Only Anna herself or the admin removes Anna's devices.
+        val removePhone = EventData.MemberDeviceRemoved(MemberDeviceRemovedData(anna.id, phone.pub.base64Url))
+        assertEquals(Rejection.Forbidden, f.write(ben, removePhone))
+        assertEquals(Rejection.UnknownTarget, f.write(anna, EventData.MemberDeviceRemoved(MemberDeviceRemovedData(anna.id, ben.pub.base64Url))))
+        assertNull(f.write(anna, removePhone))
+        assertEquals(listOf(Bytes(anna.pub)), f.ledger.state.members[anna.id]?.keys)
+        assertTrue(Bytes(phone.pub) in f.ledger.state.removedKeys)
+        assertEquals(Rejection.UnknownTarget, f.write(anna, removePhone))
+
+        // The removed device can't write any more, and its key can't come back.
+        assertEquals(Rejection.BadSignature, f.write(phone, EventData.MemberUpdated(MemberUpdatedData(anna.id, "Thief"))))
+        val again = SigningKey.generate()
+        assertNull(f.write(anna, EventData.MemberDeviceInvited(MemberDeviceInviteData(anna.id, again.publicKey.base64Url))))
+        val sig2 = again.sign(LedgerCrypto.claimInput(f.group, phone.pub))
+        assertEquals(Rejection.InvalidData, f.write(phone, EventData.MemberDeviceClaimed(MemberDeviceClaimedData(anna.id, phone.pub.base64Url, again.publicKey.base64Url, sig2.base64Url))))
+
+        // Reset: the admin removes Anna's last key; she is a seat again, keeps her
+        // payments, and her pending device invites are gone.
+        val p = f.payment(amount = 1000, track = true, inLines = listOf(anna.id to 1000L), outLines = listOf(ben.id to 1000L))
+        assertNull(f.write(anna, EventData.PaymentCreated(p)))
+        assertNull(f.write(f.admin, EventData.MemberDeviceRemoved(MemberDeviceRemovedData(anna.id, anna.pub.base64Url))))
+        val seat = f.ledger.state.members.getValue(anna.id)
+        assertTrue(!seat.isClaimed && seat.inviteKey == null && seat.deviceInvites.isEmpty())
+        assertNull(f.write(ben, EventData.ArrivalRecorded(ArrivalRecordedData("a1", p.id, anna.id, 500))))
+
+        val fresh = SigningKey.generate()
+        assertNull(f.write(f.admin, EventData.MemberInviteRenewed(MemberInviteRenewedData(anna.id, fresh.publicKey.base64Url))))
+        val newPhone = Actor(f.group, f.secret, id = anna.id)
+        val claimSig = fresh.sign(LedgerCrypto.claimInput(f.group, newPhone.pub))
+        assertNull(f.write(newPhone, EventData.MemberClaimed(MemberClaimedData(anna.id, newPhone.pub.base64Url, claimSig.base64Url))))
+        assertEquals(listOf(Bytes(newPhone.pub)), f.ledger.state.members[anna.id]?.keys)
+        assertEquals(anna.id, f.ledger.state.payments[p.id]?.creator)
+        assertNull(f.write(newPhone, EventData.PaymentDeleted(PaymentDeletedData(p.id))))
+
+        val replay = Ledger(f.group, f.secret)
+        replay.apply(f.server.events)
+        assertEquals(f.ledger.state, replay.state)
+    }
+
+    /** The recovery key replaces the admin's devices (§7.3 member.recovered, §7.2). */
+    @Test
+    fun adminRecovery() {
+        val f = Fixture()
+        val anna = f.join("Anna")
+        val deviceInvite = SigningKey.generate()
+        assertNull(f.write(f.admin, EventData.MemberDeviceInvited(MemberDeviceInviteData(f.admin.id, deviceInvite.publicKey.base64Url))))
+
+        fun recover(device: Actor, with: SigningKey, id: MemberId = device.id): Rejection? {
+            val sig = with.sign(LedgerCrypto.recoverInput(f.group, device.pub))
+            return f.write(device, EventData.MemberRecovered(MemberRecoveredData(id, device.pub.base64Url, sig.base64Url)))
+        }
+
+        // Only the admin's seat, only with the recovery key, and not with a claim signature.
+        val annaNew = Actor(f.group, f.secret, id = anna.id)
+        assertEquals(Rejection.Forbidden, recover(annaNew, f.recovery))
+        val restored = Actor(f.group, f.secret, id = f.admin.id)
+        assertEquals(Rejection.BadRecoverySig, recover(restored, SigningKey.generate()))
+        val claimSig = f.recovery.sign(LedgerCrypto.claimInput(f.group, restored.pub))
+        assertEquals(Rejection.BadRecoverySig, f.write(restored, EventData.MemberRecovered(MemberRecoveredData(f.admin.id, restored.pub.base64Url, claimSig.base64Url))))
+        assertNull(recover(restored, f.recovery))
+
+        val admin = f.ledger.state.members.getValue(f.admin.id)
+        assertTrue(admin.keys == listOf(Bytes(restored.pub)) && admin.deviceInvites.isEmpty())
+        assertTrue(Bytes(f.admin.pub) in f.ledger.state.removedKeys)
+        assertEquals(Rejection.BadSignature, f.write(f.admin, EventData.GroupUpdated(GroupUpdatedData("Lost phone"))))
+        assertNull(f.write(restored, EventData.GroupUpdated(GroupUpdatedData("Italien 2026"))))
+        assertEquals(Rejection.InvalidData, recover(restored, f.recovery)) // key reuse
+
+        // A new recovery key: admin only, new key, the old one stops working.
+        val next = SigningKey.generate()
+        val change = EventData.GroupRecoveryChanged(GroupRecoveryChangedData(next.publicKey.base64Url))
+        assertEquals(Rejection.Forbidden, f.write(anna, change))
+        assertEquals(Rejection.InvalidData, f.write(restored, EventData.GroupRecoveryChanged(GroupRecoveryChangedData(f.admin.pub.base64Url))))
+        assertNull(f.write(restored, change))
+        assertEquals(Bytes(next.publicKey), f.ledger.state.recoveryKey)
+        val second = Actor(f.group, f.secret, id = f.admin.id)
+        assertEquals(Rejection.BadRecoverySig, recover(second, f.recovery))
+        assertNull(recover(second, next))
+        assertEquals(listOf(Bytes(second.pub)), f.ledger.state.members[f.admin.id]?.keys)
+    }
+
+    /** group.created needs a recovery key different from the admin key. */
+    @Test
+    fun genesisNeedsRecoveryKey() {
+        val group = Uuids.v7()
+        val secret = randomBytes(32)
+        val admin = Actor(group, secret)
+        val k = admin.pub.base64Url
+        val e = admin.writer.write(EventData.GroupCreated(GroupCreatedData("G", "EUR", GroupCreatedData.Admin(admin.id, "A", k), k)), LedgerState(group).head)
+        val l = Ledger(group, secret)
+        l.apply(listOf(RawEvent(1, e.id, e.blob)))
+        assertEquals(Rejection.InvalidData, l.state.history.first().rejection)
+        assertNotNull(l.state.inconsistency)
     }
 
     @Test

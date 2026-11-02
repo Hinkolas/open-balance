@@ -33,9 +33,13 @@ import androidx.navigation.compose.rememberNavController
 import io.github.hinkolas.openbalance.R
 import io.github.hinkolas.openbalance.model.AppModel
 import io.github.hinkolas.openbalance.sync.GroupSession
+import io.github.hinkolas.openbalance.sync.AppLink
 import io.github.hinkolas.openbalance.ui.group.AddMemberScreen
+import io.github.hinkolas.openbalance.ui.group.CreationLinkScreen
 import io.github.hinkolas.openbalance.ui.group.DeviceInviteScreen
+import io.github.hinkolas.openbalance.ui.group.DevicesScreen
 import io.github.hinkolas.openbalance.ui.group.InviteScreen
+import io.github.hinkolas.openbalance.ui.group.RecoveryKitScreen
 import io.github.hinkolas.openbalance.ui.payments.PaymentDetailScreen
 import io.github.hinkolas.openbalance.ui.payments.PaymentFlowScreen
 import io.github.hinkolas.openbalance.ui.shell.AppShell
@@ -57,6 +61,9 @@ object Routes {
     const val ADD_MEMBER = "addMember"
     const val INVITE = "invite"
     const val DEVICE_INVITE = "deviceInvite"
+    const val DEVICES = "devices"
+    const val RECOVERY_KIT = "recoveryKit"
+    const val CREATION_LINK = "creationLink"
 
     fun payment(id: String) = "payment/$id"
 }
@@ -70,7 +77,7 @@ object Routes {
 fun Root(model: AppModel) {
     val loaded by model.loaded.collectAsStateWithLifecycle()
     val active by model.active.collectAsStateWithLifecycle()
-    val pendingInvite by model.pendingInvite.collectAsStateWithLifecycle()
+    val pendingLink by model.pendingLink.collectAsStateWithLifecycle()
     val toast by model.toast.collectAsStateWithLifecycle()
     val nav = rememberNavController()
 
@@ -79,8 +86,16 @@ fun Root(model: AppModel) {
         return
     }
 
-    LaunchedEffect(pendingInvite) {
-        if (pendingInvite != null) nav.navigate(Routes.JOIN) { launchSingleTop = true }
+    // Invites and recovery kits go to Join, creation links to Create; that screen takes the link.
+    LaunchedEffect(pendingLink) {
+        when (pendingLink) {
+            is AppLink.Invite, is AppLink.Recovery -> nav.navigate(Routes.JOIN) { launchSingleTop = true }
+            is AppLink.Creation -> nav.navigate(Routes.CREATE_GROUP) {
+                popUpTo(Routes.MAIN)
+                launchSingleTop = true
+            }
+            null -> {}
+        }
     }
 
     CompositionLocalProvider(LocalAppModel provides model, LocalNav provides nav) {
@@ -103,6 +118,9 @@ fun Root(model: AppModel) {
             modal(Routes.ADD_MEMBER) { WithSession(active, nav) { AddMemberScreen(it) } }
             modal(Routes.INVITE) { WithSession(active, nav) { InviteScreen(it) } }
             modal(Routes.DEVICE_INVITE) { WithSession(active, nav) { DeviceInviteScreen(it) } }
+            composable(Routes.DEVICES) { WithSession(active, nav) { DevicesScreen(it) } }
+            modal(Routes.RECOVERY_KIT) { RecoveryKitScreen() }
+            modal(Routes.CREATION_LINK) { CreationLinkScreen() }
         }
     }
 

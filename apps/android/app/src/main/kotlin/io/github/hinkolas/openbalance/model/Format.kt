@@ -36,7 +36,7 @@ import java.util.Locale
  */
 class GroupUi(val session: GroupSession, val state: LedgerState, private val context: Context) {
     val me: MemberId = session.me
-    val isAdmin: Boolean = state.adminId == me
+    val isAdmin: Boolean = state.adminId == me && !session.isRemoved(state, session.accessLost.value)
     val summary: Balances.Summary by lazy { state.summary() }
 
     fun money(minor: Long, signed: Boolean = false): String = Money.format(minor, state.currency, signed)
@@ -118,6 +118,9 @@ fun Resources.errorText(e: Throwable): String = when (e) {
             FlowError.Kind.SeatMissing -> R.string.error_seat_missing
             FlowError.Kind.SeatTaken -> R.string.error_seat_taken
             FlowError.Kind.UnsupportedServer -> R.string.error_unsupported_server
+            FlowError.Kind.CreationCodeUsed -> R.string.error_creation_code_used
+            FlowError.Kind.RecoveryReplaced -> R.string.error_recovery_replaced
+            FlowError.Kind.NotRecoverable -> R.string.error_not_recoverable
         },
     )
     is ServerError -> getString(R.string.error_server, e.message, e.status)
@@ -144,6 +147,7 @@ fun Resources.reasonText(r: Rejection): String = getString(
         Rejection.Misplaced -> R.string.reason_misplaced
         Rejection.AlreadyClaimed -> R.string.reason_already_claimed
         Rejection.BadInviteSig -> R.string.reason_bad_invite_sig
+        Rejection.BadRecoverySig -> R.string.reason_bad_recovery_sig
     },
 )
 

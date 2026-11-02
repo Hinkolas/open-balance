@@ -19,12 +19,16 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -77,9 +81,12 @@ import io.github.hinkolas.openbalance.model.GroupUi
 import io.github.hinkolas.openbalance.model.errorText
 import io.github.hinkolas.openbalance.model.rememberGroupUi
 import io.github.hinkolas.openbalance.sync.GroupSession
+import io.github.hinkolas.openbalance.sync.ServerOwnership
 import io.github.hinkolas.openbalance.sync.addDevice
 import io.github.hinkolas.openbalance.sync.inviteLink
+import io.github.hinkolas.openbalance.sync.newRecoveryKit
 import io.github.hinkolas.openbalance.sync.renewInvite
+import io.github.hinkolas.openbalance.sync.resetMember
 import io.github.hinkolas.openbalance.ui.ConfirmDialog
 import io.github.hinkolas.openbalance.ui.ErrorDialog
 import io.github.hinkolas.openbalance.ui.LocalAppModel
@@ -109,7 +116,9 @@ fun GroupScreen(session: GroupSession) {
     val credentials by session.credentials.collectAsStateWithLifecycle()
     var renaming by remember { mutableStateOf<RenameTarget?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var resetting by remember { mutableStateOf<Member?>(null) }
+    var confirmNewKit by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
     fun showInvite(member: MemberId) = scope.launch {
         if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_invite))) return@launch
@@ -118,7 +127,7 @@ fun GroupScreen(session: GroupSession) {
             model.handoff.invite = session.inviteLink(member) ?: session.renewInvite(member)
             nav.navigate(Routes.INVITE)
         } catch (e: Exception) {
-            error = res.errorText(e)
+            error = R.string.couldnt_create_invite to res.errorText(e)
         }
     }
 
@@ -128,17 +137,54 @@ fun GroupScreen(session: GroupSession) {
             model.handoff.invite = session.addDevice()
             nav.navigate(Routes.DEVICE_INVITE)
         } catch (e: Exception) {
-            error = res.errorText(e)
+            error = R.string.couldnt_create_invite to res.errorText(e)
+        }
+    }
+
+    // Removes all of the member's devices and shows the invite for its new one.
+    fun reset(member: MemberId) = scope.launch {
+        if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_invite))) return@launch
+        try {
+            model.handoff.invite = session.resetMember(member)
+            nav.navigate(Routes.INVITE)
+        } catch (e: Exception) {
+            error = R.string.couldnt_create_invite to res.errorText(e)
+        }
+    }
+
+    fun newRecoveryKit() = scope.launch {
+        if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_recovery))) return@launch
+        try {
+            model.handoff.recoveryKit = session.newRecoveryKit()
+            nav.navigate(Routes.RECOVERY_KIT)
+        } catch (e: Exception) {
+            error = R.string.couldnt_create_recovery_kit to res.errorText(e)
+        }
+    }
+
+    fun showCreationLink(server: ServerOwnership) = scope.launch {
+        if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_creation))) return@launch
+        try {
+            model.handoff.creationLink = model.creationLink(server)
+            nav.navigate(Routes.CREATION_LINK)
+        } catch (e: Exception) {
+            error = R.string.couldnt_create_link to res.errorText(e)
         }
     }
 
     TabScaffold(session, title = { Text(stringResource(R.string.tab_group)) }, addButton = false) {
         val memberRows = buildList<@Composable () -> Unit> {
             for (m in ui.state.orderedMembers) add {
-                MemberRow(ui, m, invite = { showInvite(m.id) }, rename = { renaming = RenameTarget.Member(m.id, m.name) }, addDevice = { showDeviceInvite() })
+                MemberRow(
+                    ui, m,
+                    invite = { showInvite(m.id) },
+                    rename = { renaming = RenameTarget.Member(m.id, m.name) },
+                    addDevice = { showDeviceInvite() },
+                    reset = { resetting = m },
+                )
             }
             if (ui.isAdmin) add { ActionRow(Icons.Outlined.PersonAdd, stringResource(R.string.add_member)) { nav.navigate(Routes.ADD_MEMBER) } }
-            add { ActionRow(Icons.Outlined.QrCode2, stringResource(R.string.add_device)) { showDeviceInvite() } }
+            add { ActionRow(Icons.Outlined.Devices, stringResource(R.string.your_devices)) { nav.navigate(Routes.DEVICES) } }
         }
         section(
             "members", header = res.getString(R.string.members), rows = memberRows,
@@ -149,6 +195,7 @@ fun GroupScreen(session: GroupSession) {
             add { Info(stringResource(R.string.currency), ui.state.currency) }
             add { Info(stringResource(R.string.server), credentials.server.toHttpUrlOrNull()?.host ?: credentials.server) }
             if (ui.isAdmin) add { ActionRow(Icons.Outlined.Edit, stringResource(R.string.rename_group)) { renaming = RenameTarget.Group(ui.state.name) } }
+            if (ui.isAdmin) add { ActionRow(Icons.Outlined.Key, stringResource(R.string.new_recovery_kit)) { confirmNewKit = true } }
         }
         section("this-group", header = res.getString(R.string.this_group), rows = groupRows)
 
@@ -173,9 +220,7 @@ fun GroupScreen(session: GroupSession) {
                     colors = listItemColors(),
                     headlineContent = { OneLine(s.name) },
                     supportingContent = { OneLine(s.server.toHttpUrlOrNull()?.host ?: s.server, style = MaterialTheme.typography.bodyMedium) },
-                    trailingContent = {
-                        IconButton(onClick = { model.removeServer(s) }) { Icon(Icons.Outlined.Delete, stringResource(R.string.remove)) }
-                    },
+                    trailingContent = { ServerMenu(onCreationLink = { showCreationLink(s) }, onRemove = { model.removeServer(s) }) },
                 )
             }
             add { ActionRow(Icons.Outlined.Dns, stringResource(R.string.add_server)) { nav.navigate(Routes.ADD_SERVER) } }
@@ -200,7 +245,25 @@ fun GroupScreen(session: GroupSession) {
     }
 
     renaming?.let { RenameSheet(session, it) { renaming = null } }
-    error?.let { ErrorDialog(stringResource(R.string.couldnt_create_invite), it) { error = null } }
+    error?.let { (title, message) -> ErrorDialog(stringResource(title), message) { error = null } }
+    resetting?.let { m ->
+        ConfirmDialog(
+            title = stringResource(R.string.reset_access_title, m.name),
+            message = stringResource(R.string.reset_access_message, m.name),
+            confirm = stringResource(R.string.reset),
+            onConfirm = { reset(m.id) },
+            onDismiss = { resetting = null },
+        )
+    }
+    if (confirmNewKit) {
+        ConfirmDialog(
+            title = stringResource(R.string.new_recovery_kit_title),
+            message = stringResource(R.string.new_recovery_kit_message),
+            confirm = stringResource(R.string.create),
+            onConfirm = { newRecoveryKit() },
+            onDismiss = { confirmNewKit = false },
+        )
+    }
     if (confirmLeave) {
         ConfirmDialog(
             title = stringResource(R.string.remove_group_title),
@@ -213,12 +276,13 @@ fun GroupScreen(session: GroupSession) {
 }
 
 @Composable
-private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> Unit, addDevice: () -> Unit) {
+private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> Unit, addDevice: () -> Unit, reset: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     // The Invite button beside an unclaimed member already says it's invited; keep the status to one line.
     val role = stringResource(if (m.isAdmin) R.string.admin else if (m.isClaimed) R.string.joined else R.string.not_joined_yet)
     val status = if (m.keys.size > 1) stringResource(R.string.role_devices, role, m.keys.size) else role
     val canRename = ui.isAdmin || m.id == ui.me
+    val canReset = ui.isAdmin && m.id != ui.me && m.isClaimed
     ListItem(
         colors = listItemColors(),
         leadingContent = { MemberAvatar(m.initial, isMe = m.id == ui.me) },
@@ -231,7 +295,7 @@ private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> 
                         Text(stringResource(R.string.invite))
                     }
                 }
-                if (canRename || m.id == ui.me) {
+                if (canRename || canReset) {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.more)) }
                         DropdownMenu(menu, onDismissRequest = { menu = false }) {
@@ -251,12 +315,47 @@ private fun MemberRow(ui: GroupUi, m: Member, invite: () -> Unit, rename: () -> 
                                     addDevice()
                                 },
                             )
+                            if (canReset) DropdownMenuItem(
+                                text = { Text(stringResource(R.string.reset_access)) },
+                                leadingIcon = { Icon(Icons.Outlined.LockReset, null) },
+                                onClick = {
+                                    menu = false
+                                    reset()
+                                },
+                            )
                         }
                     }
                 }
             }
         },
     )
+}
+
+/** A server row's menu: hand out a creation link, or forget the server on this device. */
+@Composable
+private fun ServerMenu(onCreationLink: () -> Unit, onRemove: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.more)) }
+        DropdownMenu(open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.let_someone_create)) },
+                leadingIcon = { Icon(Icons.Outlined.Share, null) },
+                onClick = {
+                    open = false
+                    onCreationLink()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.remove)) },
+                leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                onClick = {
+                    open = false
+                    onRemove()
+                },
+            )
+        }
+    }
 }
 
 @Composable

@@ -1,6 +1,7 @@
 package io.github.hinkolas.openbalance.sync
 
 import io.github.hinkolas.openbalance.core.Base64Url
+import io.github.hinkolas.openbalance.core.Bytes
 import io.github.hinkolas.openbalance.core.EventData
 import io.github.hinkolas.openbalance.core.EventWriter
 import io.github.hinkolas.openbalance.core.Ledger
@@ -77,6 +78,13 @@ class GroupSession(
     private val _isLive = MutableStateFlow(false)
     val isLive: StateFlow<Boolean> = _isLive.asStateFlow()
 
+    private val _accessLost = MutableStateFlow(false)
+    /** The server refused this device's key: it was removed, or the group is gone. */
+    val accessLost: StateFlow<Boolean> = _accessLost.asStateFlow()
+
+    /** This device's public member key. */
+    val deviceKey: Bytes = Bytes(credentials.signer.publicKey)
+
     private val syncMutex = Mutex()
     private val syncQueued = AtomicBoolean(false)
     private var liveJob: Job? = null
@@ -89,7 +97,16 @@ class GroupSession(
     }
 
     val me: MemberId get() = _credentials.value.memberId
-    val isAdmin: Boolean get() = _state.value.adminId == me
+    val isAdmin: Boolean get() = _state.value.adminId == me && !isRemoved
+
+    /**
+     * This device no longer belongs to the group: removed in the ledger, or
+     * refused by the server. It can only forget the group.
+     */
+    val isRemoved: Boolean get() = isRemoved(_state.value, _accessLost.value)
+
+    /** [isRemoved] for a given state, for UIs that observe [state] and [accessLost]. */
+    fun isRemoved(state: LedgerState, accessLost: Boolean): Boolean = accessLost || deviceKey in state.removedKeys
 
     // MARK: - Writing
 
@@ -126,11 +143,15 @@ class GroupSession(
                 syncQueued.set(false)
                 _isSyncing.value = true
                 try {
-                    push()
-                    pull()
+                    noteAccess {
+                        push()
+                        pull()
+                    }
                     _lastError.value = null
                 } catch (e: CancellationException) {
                     throw e
+                } catch (e: ServerError) {
+                    _lastError.value = if (e.status == 403 && _accessLost.value) null else e
                 } catch (e: Exception) {
                     _lastError.value = e
                 } finally {
@@ -143,9 +164,24 @@ class GroupSession(
     /** Sync and wait for it, throwing the first error. */
     suspend fun syncNow() {
         syncMutex.withLock {
-            push()
-            pull()
+            noteAccess {
+                push()
+                pull()
+            }
             _lastError.value = null
+        }
+    }
+
+    /** A 403 for a registered key means the server cut this device off. */
+    private suspend fun noteAccess(op: suspend () -> Unit) {
+        try {
+            op()
+        } catch (e: ServerError) {
+            if (e.status == 403 && _credentials.value.registered) {
+                _accessLost.value = true
+                stopLive()
+            }
+            throw e
         }
     }
 
@@ -204,7 +240,7 @@ class GroupSession(
     /** Keep a stream open while the app is in the foreground; pull on every new head. */
     fun startLive() {
         synchronized(lock) {
-            if (liveJob != null) return
+            if (liveJob != null || isRemoved) return
             liveJob = scope.launch {
                 var backoff = 1_000L
                 while (isActive) {

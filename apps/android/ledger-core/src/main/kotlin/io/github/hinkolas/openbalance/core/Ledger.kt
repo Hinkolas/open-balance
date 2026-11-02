@@ -23,6 +23,7 @@ enum class Rejection(val code: String) {
     Misplaced("misplaced"),
     AlreadyClaimed("already_claimed"),
     BadInviteSig("bad_invite_sig"),
+    BadRecoverySig("bad_recovery_sig"),
 }
 
 /** Why the server's history can't be trusted (§6.4, §7.1). The app words it. */
@@ -42,7 +43,8 @@ data class Member(
     val name: String,
     /**
      * Public keys of the member's devices, in the order they joined. Empty
-     * while unclaimed. Every key writes as the member (§3.2).
+     * while unclaimed. Every key writes as the member (§3.2); removed keys
+     * are gone from here.
      */
     val keys: List<Bytes> = emptyList(),
     /** Current invite public key while unclaimed. */
@@ -109,6 +111,9 @@ class LedgerState(val groupId: UUID) {
         internal set
     var adminId: MemberId? = null
         internal set
+    /** The current public recovery key (§3.4). */
+    var recoveryKey: Bytes? = null
+        internal set
     /** Set when the server's history can't be trusted (§6.4) or seq 1 is not a valid group.created. */
     var inconsistency: Inconsistency? = null
         internal set
@@ -122,6 +127,12 @@ class LedgerState(val groupId: UUID) {
     /** chains[n] = chain_n; chains[0] is zero. */
     internal val chainsMut = arrayListOf(Bytes(LedgerCrypto.chainZero))
     internal val seenIdsMut = HashSet<UUID>()
+    /** Every key any valid event introduced; none may appear again (§7.3). */
+    internal val usedKeysMut = HashSet<Bytes>()
+    /** Member keys removed by `member.device_removed` or `member.recovered`. */
+    internal val removedKeysMut = HashSet<Bytes>()
+    /** When each member key joined, as the writer's `at` (display only). */
+    internal val keyAddedAtMut = HashMap<Bytes, String>()
 
     val members: Map<MemberId, Member> get() = membersMut
     val memberOrder: List<MemberId> get() = memberOrderMut
@@ -131,6 +142,9 @@ class LedgerState(val groupId: UUID) {
     val history: List<HistoryItem> get() = historyMut
     val chains: List<Bytes> get() = chainsMut
     val seenIds: Set<UUID> get() = seenIdsMut
+    val usedKeys: Set<Bytes> get() = usedKeysMut
+    val removedKeys: Set<Bytes> get() = removedKeysMut
+    val keyAddedAt: Map<Bytes, String> get() = keyAddedAtMut
 
     val lastSeq: Long get() = (chainsMut.size - 1).toLong()
     val head: EventHeader.Seen get() = EventHeader.Seen(lastSeq, chainsMut.last().base64Url)
@@ -149,6 +163,7 @@ class LedgerState(val groupId: UUID) {
         s.name = name
         s.currency = currency
         s.adminId = adminId
+        s.recoveryKey = recoveryKey
         s.inconsistency = inconsistency
         s.membersMut.putAll(membersMut)
         s.memberOrderMut.addAll(memberOrderMut)
@@ -159,12 +174,15 @@ class LedgerState(val groupId: UUID) {
         s.chainsMut.clear()
         s.chainsMut.addAll(chainsMut)
         s.seenIdsMut.addAll(seenIdsMut)
+        s.usedKeysMut.addAll(usedKeysMut)
+        s.removedKeysMut.addAll(removedKeysMut)
+        s.keyAddedAtMut.putAll(keyAddedAtMut)
         return s
     }
 
     private fun fields(): List<Any?> = listOf(
-        groupId, name, currency, adminId, inconsistency, membersMut, memberOrderMut, paymentsMut,
-        paymentOrderMut, arrivalsMut, historyMut, chainsMut, seenIdsMut,
+        groupId, name, currency, adminId, recoveryKey, inconsistency, membersMut, memberOrderMut, paymentsMut,
+        paymentOrderMut, arrivalsMut, historyMut, chainsMut, seenIdsMut, usedKeysMut, removedKeysMut, keyAddedAtMut,
     )
 
     override fun equals(other: Any?): Boolean = other is LedgerState && fields() == other.fields()
@@ -253,6 +271,7 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
         is EventData.GroupCreated -> listOfNotNull(Bytes.ofBase64Url(data.data.admin.key))
         is EventData.MemberClaimed -> listOfNotNull(Bytes.ofBase64Url(data.data.key))
         is EventData.MemberDeviceClaimed -> listOfNotNull(Bytes.ofBase64Url(data.data.key))
+        is EventData.MemberRecovered -> listOfNotNull(Bytes.ofBase64Url(data.data.key))
         else -> state.keysOf(header.author)
     }
 
@@ -281,19 +300,32 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val d = data.data
                 if (!(seq == 1L || (seq == null && !s.isCreated))) return Rejection.Misplaced
                 val key = Bytes.ofBase64Url(d.admin.key)
+                val recovery = Bytes.ofBase64Url(d.recoveryKey)
                 if (h.author != d.admin.id || !validName(d.name) || !validName(d.admin.name) ||
-                    !Currency.isValidCode(d.currency) || key == null || key.size != 32
+                    !Currency.isValidCode(d.currency) || key == null || key.size != 32 ||
+                    recovery == null || recovery.size != 32 || recovery == key
                 ) return Rejection.InvalidData
                 s.name = d.name
                 s.currency = d.currency
                 s.adminId = d.admin.id
-                addMember(Member(id = d.admin.id, name = d.admin.name, keys = listOf(key), isAdmin = true))
+                s.recoveryKey = recovery
+                use(recovery)
+                addMember(Member(id = d.admin.id, name = d.admin.name, isAdmin = true))
+                addKey(key, d.admin.id, h.at)
             }
 
             is EventData.GroupUpdated -> {
                 if (!isAdmin) return Rejection.Forbidden
                 if (!validName(data.data.name)) return Rejection.InvalidData
                 s.name = data.data.name
+            }
+
+            is EventData.GroupRecoveryChanged -> {
+                if (!isAdmin) return Rejection.Forbidden
+                val key = Bytes.ofBase64Url(data.data.recoveryKey)
+                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                s.recoveryKey = key
+                use(key)
             }
 
             is EventData.MemberAdded -> {
@@ -303,6 +335,7 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val key = Bytes.ofBase64Url(d.inviteKey)
                 if (!validName(d.name) || key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
                 addMember(Member(id = d.id, name = d.name, inviteKey = key, isAdmin = false))
+                use(key)
             }
 
             is EventData.MemberInviteRenewed -> {
@@ -313,6 +346,7 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val key = Bytes.ofBase64Url(d.inviteKey)
                 if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
                 s.membersMut[d.id] = m.copy(inviteKey = key)
+                use(key)
             }
 
             is EventData.MemberClaimed -> {
@@ -324,7 +358,8 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
                 val invite = m.inviteKey
                 if (invite == null || !inviteSigned(d.inviteSig, invite, key)) return Rejection.BadInviteSig
-                s.membersMut[d.id] = m.copy(keys = listOf(key), inviteKey = null)
+                s.membersMut[d.id] = m.copy(inviteKey = null)
+                addKey(key, d.id, h.at)
             }
 
             is EventData.MemberUpdated -> {
@@ -343,6 +378,7 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val key = Bytes.ofBase64Url(d.inviteKey)
                 if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
                 s.membersMut[d.id] = m.copy(deviceInvites = m.deviceInvites + key)
+                use(key)
             }
 
             is EventData.MemberDeviceClaimed -> {
@@ -353,7 +389,8 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
                 val invite = Bytes.ofBase64Url(d.inviteKey)
                 if (invite == null || invite !in m.deviceInvites || !inviteSigned(d.inviteSig, invite, key)) return Rejection.BadInviteSig
-                s.membersMut[d.id] = m.copy(keys = m.keys + key, deviceInvites = m.deviceInvites.filter { it != invite })
+                s.membersMut[d.id] = m.copy(deviceInvites = m.deviceInvites.filter { it != invite })
+                addKey(key, d.id, h.at)
             }
 
             is EventData.MemberDeviceInviteRevoked -> {
@@ -363,6 +400,31 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val invite = Bytes.ofBase64Url(d.inviteKey)
                 if (invite == null || invite !in m.deviceInvites) return Rejection.UnknownTarget
                 s.membersMut[d.id] = m.copy(deviceInvites = m.deviceInvites.filter { it != invite })
+            }
+
+            is EventData.MemberDeviceRemoved -> {
+                val d = data.data
+                val m = s.membersMut[d.id] ?: return Rejection.UnknownTarget
+                if (!(isAdmin || h.author == d.id)) return Rejection.Forbidden
+                val key = Bytes.ofBase64Url(d.key)
+                if (key == null || key !in m.keys) return Rejection.UnknownTarget
+                val keys = m.keys.filter { it != key }
+                s.removedKeysMut.add(key)
+                // Unclaimed again: the admin renews its invite for a new first device.
+                s.membersMut[d.id] = if (keys.isEmpty()) m.copy(keys = keys, inviteKey = null, deviceInvites = emptyList()) else m.copy(keys = keys)
+            }
+
+            is EventData.MemberRecovered -> {
+                val d = data.data
+                if (d.id != s.adminId || h.author != d.id) return Rejection.Forbidden
+                val key = Bytes.ofBase64Url(d.key)
+                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val recovery = s.recoveryKey
+                if (recovery == null || !signed(d.recoverySig, recovery, LedgerCrypto.recoverInput(groupId, key.toByteArray()))) return Rejection.BadRecoverySig
+                val m = s.membersMut.getValue(d.id)
+                s.removedKeysMut.addAll(m.keys)
+                s.membersMut[d.id] = m.copy(keys = emptyList(), deviceInvites = emptyList())
+                addKey(key, d.id, h.at)
             }
 
             is EventData.PaymentCreated -> {
@@ -419,13 +481,27 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
         state.memberOrderMut.add(m.id)
     }
 
-    private fun keyInUse(key: Bytes): Boolean =
-        state.membersMut.values.any { key in it.keys || it.inviteKey == key || key in it.deviceInvites }
+    /** Keys are never reused within a group (§7.3). */
+    private fun keyInUse(key: Bytes): Boolean = key in state.usedKeysMut
+
+    private fun use(key: Bytes) {
+        state.usedKeysMut.add(key)
+    }
+
+    private fun addKey(key: Bytes, member: MemberId, at: String) {
+        val m = state.membersMut[member] ?: return
+        state.membersMut[member] = m.copy(keys = m.keys + key)
+        state.keyAddedAtMut[key] = at
+        use(key)
+    }
 
     /** `inviteSig` (§7.3): the invite key vouches for `key` in this group. */
-    private fun inviteSigned(sig: String, invite: Bytes, key: Bytes): Boolean {
+    private fun inviteSigned(sig: String, invite: Bytes, key: Bytes): Boolean =
+        signed(sig, invite, LedgerCrypto.claimInput(groupId, key.toByteArray()))
+
+    private fun signed(sig: String, publicKey: Bytes, input: ByteArray): Boolean {
         val s = Base64Url.decode(sig) ?: return false
-        return Ed25519.verify(invite.toByteArray(), s, LedgerCrypto.claimInput(groupId, key.toByteArray()))
+        return Ed25519.verify(publicKey.toByteArray(), s, input)
     }
 
     private fun validPayment(p: Payment): Boolean {

@@ -1,6 +1,7 @@
 package io.github.hinkolas.openbalance.ui.shell
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,9 +10,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -29,8 +37,10 @@ import androidx.compose.material.icons.outlined.ArrowCircleUp
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.PhonelinkErase
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,7 +51,9 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -57,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -91,6 +104,12 @@ enum class AppTab(val label: Int, val icon: ImageVector, val selectedIcon: Image
  */
 @Composable
 fun AppShell(session: GroupSession) {
+    val state by session.state.collectAsStateWithLifecycle()
+    val accessLost by session.accessLost.collectAsStateWithLifecycle()
+    if (session.isRemoved(state, accessLost)) {
+        RemovedScreen(session, state.name)
+        return
+    }
     var tab by rememberSaveable { mutableStateOf(AppTab.Overview) }
     var historyFilter by rememberSaveable { mutableStateOf(HistoryFilter.All) }
     Scaffold(
@@ -117,6 +136,46 @@ fun AppShell(session: GroupSession) {
                 AppTab.Settle -> SettleScreen(session)
                 AppTab.History -> HistoryScreen(session, historyFilter) { historyFilter = it }
                 AppTab.Group -> GroupScreen(session)
+            }
+        }
+    }
+}
+
+/**
+ * This device was removed from the group (or the server refuses it): all it
+ * can do is forget the group, or switch to another one.
+ */
+@Composable
+private fun RemovedScreen(session: GroupSession, groupName: String) {
+    val model = LocalAppModel.current
+    val sessions by model.sessions.collectAsStateWithLifecycle()
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(
+            Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+            Icon(Icons.Outlined.PhonelinkErase, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.device_removed_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(
+                stringResource(R.string.device_removed_text, groupName),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 420.dp),
+            )
+            Button(onClick = { model.forget(session) }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().height(56.dp)) {
+                Text(stringResource(R.string.remove_from_device))
+            }
+            val others = sessions.filter { it.id != session.id }
+            if (others.isNotEmpty()) {
+                Text(stringResource(R.string.your_groups), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                for (s in others) {
+                    val other by s.state.collectAsStateWithLifecycle()
+                    OutlinedButton(onClick = { model.activate(s.id) }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
+                        Text(other.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }

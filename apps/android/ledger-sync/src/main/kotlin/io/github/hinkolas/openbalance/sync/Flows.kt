@@ -3,13 +3,16 @@ package io.github.hinkolas.openbalance.sync
 import io.github.hinkolas.openbalance.core.Bytes
 import io.github.hinkolas.openbalance.core.EventData
 import io.github.hinkolas.openbalance.core.GroupCreatedData
+import io.github.hinkolas.openbalance.core.GroupRecoveryChangedData
 import io.github.hinkolas.openbalance.core.LedgerCrypto
 import io.github.hinkolas.openbalance.core.MemberAddedData
 import io.github.hinkolas.openbalance.core.MemberClaimedData
 import io.github.hinkolas.openbalance.core.MemberDeviceClaimedData
 import io.github.hinkolas.openbalance.core.MemberDeviceInviteData
+import io.github.hinkolas.openbalance.core.MemberDeviceRemovedData
 import io.github.hinkolas.openbalance.core.MemberId
 import io.github.hinkolas.openbalance.core.MemberInviteRenewedData
+import io.github.hinkolas.openbalance.core.MemberRecoveredData
 import io.github.hinkolas.openbalance.core.SigningKey
 import io.github.hinkolas.openbalance.core.Uuids
 import io.github.hinkolas.openbalance.core.base64Url
@@ -20,27 +23,91 @@ import java.io.File
 
 /** Why a create, invite or join flow stopped. The app words it. */
 class FlowError(val kind: Kind) : Exception(kind.name) {
-    enum class Kind { NotAdmin, InviteUsed, SeatMissing, SeatTaken, UnsupportedServer }
+    enum class Kind { NotAdmin, InviteUsed, SeatMissing, SeatTaken, UnsupportedServer, CreationCodeUsed, RecoveryReplaced, NotRecoverable }
 }
 
-// Create, invite, add devices and join (PROTOCOL.md §5.4).
+// Create, invite, add and remove devices, join and recover (PROTOCOL.md §5.4).
 
-/** Create a group on a server this device owns, as its admin. */
+/**
+ * Create a group as its admin. [token] is the server's ADMIN_TOKEN or a
+ * creation code from the server owner. Returns the recovery kit too, which
+ * this device doesn't keep: show it once.
+ */
 suspend fun GroupSession.Companion.create(
-    server: String, ownerToken: String, name: String, currency: String, myName: String,
+    server: String, token: String, name: String, currency: String, myName: String,
     store: CredentialStore, cacheRoot: File, scope: CoroutineScope,
-): GroupSession {
+): Pair<GroupSession, RecoveryLink> {
     val client = ServerClient(server)
     if (1 !in client.info().protocols) throw FlowError(FlowError.Kind.UnsupportedServer)
     val groupId = Uuids.v7()
     val key = SigningKey.generate()
-    client.createGroup(ownerToken, groupId, key.publicKey)
+    val recoverySeed = randomBytes(32)
+    val recovery = SigningKey(recoverySeed)
+    try {
+        client.createGroup(token, groupId, key.publicKey, recovery.publicKey)
+    } catch (e: ServerError) {
+        if (e.status == 401) throw FlowError(FlowError.Kind.CreationCodeUsed)
+        throw e
+    }
     val creds = GroupCredentials.create(server, groupId, randomBytes(32), Uuids.v7().lower, key.seed, registered = true)
     store.save(creds)
     val session = GroupSession(creds, store, cacheRoot, scope)
-    session.submit(EventData.GroupCreated(GroupCreatedData(name, currency, GroupCreatedData.Admin(creds.memberId, myName, key.publicKey.base64Url))))
+    session.submit(
+        EventData.GroupCreated(
+            GroupCreatedData(name, currency, GroupCreatedData.Admin(creds.memberId, myName, key.publicKey.base64Url), recovery.publicKey.base64Url),
+        ),
+    )
     session.syncNow()
-    return session
+    return session to RecoveryLink(server, groupId, creds.memberId, creds.secretBytes, recoverySeed)
+}
+
+/** Replace the recovery kit: the old one stops working. Returns the new one, which this device doesn't keep. */
+suspend fun GroupSession.newRecoveryKit(): RecoveryLink {
+    if (!isAdmin) throw FlowError(FlowError.Kind.NotAdmin)
+    val seed = randomBytes(32)
+    val recovery = SigningKey(seed)
+    client.replaceRecovery(credentials.value.signer, id, recovery.publicKey)
+    submit(EventData.GroupRecoveryChanged(GroupRecoveryChangedData(recovery.publicKey.base64Url)))
+    syncNow()
+    val c = credentials.value
+    return RecoveryLink(c.server, id, me, c.secretBytes, seed)
+}
+
+/**
+ * Remove a device of a member: one of my own other devices, or (admin) any
+ * member's. The ledger first, then the server cuts the key off.
+ */
+suspend fun GroupSession.removeDevice(member: MemberId, key: Bytes) {
+    if (member != me && !isAdmin) throw FlowError(FlowError.Kind.NotAdmin)
+    if (state.value.members[member]?.keys?.contains(key) == true) {
+        submit(EventData.MemberDeviceRemoved(MemberDeviceRemovedData(member, key.base64Url)))
+        syncNow()
+    }
+    try {
+        client.removeKey(credentials.value.signer, id, key.toByteArray())
+    } catch (e: ServerError) {
+        if (e.status != 404) throw e
+    }
+}
+
+/**
+ * Reset a member who lost every device (admin): remove all its devices and
+ * return a new invite for its new first device. The member keeps its
+ * payments and balance.
+ */
+suspend fun GroupSession.resetMember(member: MemberId): InviteLink {
+    if (!isAdmin || member == me) throw FlowError(FlowError.Kind.NotAdmin)
+    val keys = state.value.members[member]?.keys ?: emptyList()
+    for (key in keys) submit(EventData.MemberDeviceRemoved(MemberDeviceRemovedData(member, key.base64Url)))
+    if (keys.isNotEmpty()) syncNow()
+    for (key in keys) {
+        try {
+            client.removeKey(credentials.value.signer, id, key.toByteArray())
+        } catch (e: ServerError) {
+            if (e.status != 404) throw e
+        }
+    }
+    return renewInvite(member)
 }
 
 private fun GroupSession.link(member: MemberId, seed: ByteArray): InviteLink {
@@ -180,5 +247,47 @@ suspend fun GroupSession.Companion.join(
         else -> throw FlowError(FlowError.Kind.SeatTaken)
     }
     session.syncNow()
+    return session
+}
+
+/**
+ * Take over the admin's seat with the recovery kit: the server swaps all of
+ * the admin's devices for this one, then the ledger records it. Safe to
+ * retry with the same kit and [existing] credentials.
+ */
+suspend fun GroupSession.Companion.recover(
+    link: RecoveryLink, existing: GroupCredentials?, store: CredentialStore, cacheRoot: File, scope: CoroutineScope,
+): GroupSession {
+    val client = ServerClient(link.server)
+    val recovery = SigningKey(link.recoverySeed)
+    var creds = existing ?: GroupCredentials.create(link.server, link.groupId, link.secret, link.adminId, SigningKey.generate().seed, registered = false)
+    if (!creds.registered) {
+        store.save(creds)
+        val member = creds.signer
+        try {
+            client.recover(recovery, member, link.groupId)
+        } catch (e: ServerError) {
+            if (e.status != 403 && e.status != 409) throw e
+            // Registered by an earlier attempt, or the kit was replaced.
+            try {
+                client.read(member, link.groupId, after = 0, limit = 1)
+            } catch (err: Exception) {
+                store.delete(link.groupId)
+                if (e.status == 403) throw FlowError(FlowError.Kind.RecoveryReplaced)
+                throw err
+            }
+        }
+        creds = creds.copy(registered = true)
+        store.save(creds)
+    }
+    val session = GroupSession(creds, store, cacheRoot, scope)
+    session.syncNow()
+    if (session.state.value.adminId != link.adminId) throw FlowError(FlowError.Kind.NotRecoverable)
+    val memberKey = creds.signer.publicKey
+    if (session.state.value.members[link.adminId]?.keys?.contains(Bytes(memberKey)) != true) {
+        val sig = recovery.sign(LedgerCrypto.recoverInput(link.groupId, memberKey))
+        session.submit(EventData.MemberRecovered(MemberRecoveredData(link.adminId, memberKey.base64Url, sig.base64Url)))
+        session.syncNow()
+    }
     return session
 }

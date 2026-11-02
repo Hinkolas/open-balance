@@ -38,7 +38,7 @@ class CryptoVectorTests {
         val key = LedgerCrypto.encKey(b(keys.s("groupSecret")), group)
         assertContentEquals(b(keys.s("encKey")), key)
 
-        for (who in listOf("admin", "member", "invite")) {
+        for (who in listOf("admin", "member", "invite", "recovery")) {
             val kp = keys.getValue(who).jsonObject
             assertContentEquals(b(kp.s("publicKey")), SigningKey(b(kp.s("seed"))).publicKey, who)
         }
@@ -72,6 +72,14 @@ class CryptoVectorTests {
         val invitePub = b(keys.getValue("invite").jsonObject.s("publicKey"))
         assertTrue(Ed25519.verify(memberPub, b(claim.s("proof")), LedgerCrypto.claimInput(group, invitePub)))
         assertTrue(Ed25519.verify(invitePub, b(claim.s("inviteSig")), LedgerCrypto.claimInput(group, memberPub)))
+
+        val recover = v.getValue("recover").jsonObject
+        val recoveryPub = b(keys.getValue("recovery").jsonObject.s("publicKey"))
+        val recoverInput = LedgerCrypto.recoverInput(group, memberPub)
+        assertEquals(recover.s("signingInputHex"), recoverInput.hex)
+        assertTrue(Ed25519.verify(recoveryPub, b(recover.s("recoverySig")), recoverInput))
+        assertTrue(Ed25519.verify(memberPub, b(recover.s("proof")), LedgerCrypto.claimInput(group, recoveryPub)))
+        assertTrue(!Ed25519.verify(recoveryPub, b(recover.s("recoverySig")), LedgerCrypto.claimInput(group, memberPub)))
     }
 }
 

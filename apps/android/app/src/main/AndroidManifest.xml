@@ -31,12 +31,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- openbalance://join?… (PROTOCOL.md §4): the camera app opens invite QR codes here. -->
+            <!-- openbalance://join, recover and create (PROTOCOL.md §4): invite QR codes from the
+                 camera app, recovery kits from a password manager, creation links from a message. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="openbalance" android:host="join" />
+                <data android:scheme="openbalance" />
+                <data android:host="join" />
+                <data android:host="recover" />
+                <data android:host="create" />
             </intent-filter>
         </activity>
     </application>

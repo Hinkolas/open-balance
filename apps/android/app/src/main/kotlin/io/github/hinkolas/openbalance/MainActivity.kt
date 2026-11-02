@@ -26,7 +26,7 @@ class MainActivity : FragmentActivity() {
         handle(intent)
     }
 
-    /** `openbalance://join?…`, opened from the camera app, a browser or a message. */
+    /** `openbalance://join`, `recover` or `create`, opened from the camera app, a browser, a password manager or a message. */
     private fun handle(intent: Intent?) {
         if (intent?.action == Intent.ACTION_VIEW) intent.dataString?.let(model::handle)
     }

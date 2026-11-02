@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -99,7 +100,8 @@ enum class HistoryFilter(val label: Int, val icon: ImageVector, val empty: Int) 
         Members -> when (item.data) {
             is EventData.GroupCreated, is EventData.GroupUpdated, is EventData.MemberAdded, is EventData.MemberInviteRenewed,
             is EventData.MemberClaimed, is EventData.MemberUpdated, is EventData.MemberDeviceInvited,
-            is EventData.MemberDeviceClaimed, is EventData.MemberDeviceInviteRevoked -> true
+            is EventData.MemberDeviceClaimed, is EventData.MemberDeviceInviteRevoked, is EventData.GroupRecoveryChanged,
+            is EventData.MemberDeviceRemoved, is EventData.MemberRecovered -> true
             else -> false
         }
     }
@@ -263,6 +265,11 @@ private fun entry(res: Resources, ui: GroupUi, item: HistoryItem, c: HistoryColo
         is EventData.MemberDeviceInvited -> HistoryEntry(member(d.data.id), Icons.Outlined.QrCode2, c.neutral, ui.memberName(d.data.id), s(R.string.qr_for_another_device))
         is EventData.MemberDeviceClaimed -> HistoryEntry(member(d.data.id), Icons.Outlined.PhoneAndroid, c.positive, ui.memberName(d.data.id), s(R.string.added_another_device))
         is EventData.MemberDeviceInviteRevoked -> HistoryEntry(member(d.data.id), Icons.Outlined.Close, c.negative, ui.memberName(d.data.id), s(R.string.device_qr_revoked_by, by))
+        is EventData.GroupRecoveryChanged -> HistoryEntry(
+            EventSubject.Symbol(Icons.Outlined.Groups), Icons.Outlined.Key, c.neutral, ui.state.name, s(R.string.recovery_replaced_by, by),
+        )
+        is EventData.MemberDeviceRemoved -> HistoryEntry(member(d.data.id), Icons.Outlined.Close, c.negative, ui.memberName(d.data.id), s(R.string.device_removed_by, by))
+        is EventData.MemberRecovered -> HistoryEntry(member(d.data.id), Icons.Outlined.PhoneAndroid, c.positive, ui.memberName(d.data.id), s(R.string.restored_on_new_device))
         is EventData.PaymentCreated -> HistoryEntry(
             EventSubject.Symbol(d.payment.displayKind.icon), title = ui.title(d.payment),
             detail = s(R.string.kind_by, s(d.payment.displayKind.label), by), amount = d.payment.amount, payment = d.payment.id,

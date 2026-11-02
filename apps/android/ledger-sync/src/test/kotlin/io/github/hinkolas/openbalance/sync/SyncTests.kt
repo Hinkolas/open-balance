@@ -61,6 +61,28 @@ class InviteLinkTests {
     }
 }
 
+class LinkTests {
+    private val server = "https://open-balance.example.com"
+
+    @Test
+    fun recoveryAndCreationLinksRoundTrip() {
+        val kit = RecoveryLink(server, Uuids.v7(), Uuids.v7().lower, randomBytes(32), randomBytes(32))
+        assertEquals(kit, RecoveryLink.parse(kit.url))
+        assertEquals(kit, RecoveryLink.parse(" ${kit.url}\n"))
+        assertTrue(kit.url.startsWith("openbalance://recover?v=1&s=https://open-balance.example.com&g="), kit.url)
+        assertTrue("#" !in kit.toString())
+        val creation = CreationLink(server, randomBytes(32).let(io.github.hinkolas.openbalance.core.Base64Url::encode))
+        assertEquals(creation, CreationLink.parse(creation.url))
+        assertEquals("openbalance://create?v=1&s=https://open-balance.example.com#c=${creation.code}", creation.url)
+
+        assertEquals(AppLink.Recovery(kit), AppLink.parse(kit.url))
+        assertEquals(AppLink.Creation(creation), AppLink.parse(creation.url))
+        for (bad in listOf(kit.url.substringBefore("&r="), kit.url.replace("v=1", "v=2"), creation.url.dropLast(2), creation.url.replace("create", "join"))) {
+            assertNull(AppLink.parse(bad), bad)
+        }
+    }
+}
+
 class OutboxTests {
     @Test
     fun outboxSurvivesARestartAndShowsOptimistically() {
@@ -72,7 +94,8 @@ class OutboxTests {
             val store = MemoryCredentialStore()
             val s = GroupSession(creds, store, dir, scope)
             s.submit(EventData.GroupCreated(io.github.hinkolas.openbalance.core.GroupCreatedData("Trip", "EUR",
-                io.github.hinkolas.openbalance.core.GroupCreatedData.Admin(creds.memberId, "Jonas", io.github.hinkolas.openbalance.core.Base64Url.encode(key.publicKey)))))
+                io.github.hinkolas.openbalance.core.GroupCreatedData.Admin(creds.memberId, "Jonas", io.github.hinkolas.openbalance.core.Base64Url.encode(key.publicKey)),
+                io.github.hinkolas.openbalance.core.Base64Url.encode(SigningKey.generate().publicKey))))
             assertEquals("Trip", s.state.value.name)
             assertEquals(1, s.pendingCount.value)
             assertTrue(s.state.value.history.single().pending)
@@ -116,7 +139,8 @@ class IntegrationTests {
         fun dir(name: String) = File(tmp, name)
 
         // Device 1: Jonas creates the group and adds Ben.
-        val jonas = GroupSession.create(server!!, token, "Italien 2026", "EUR", "Jonas", MemoryCredentialStore(), dir("jonas"), scope)
+        val (jonas, kit) = GroupSession.create(server!!, token, "Italien 2026", "EUR", "Jonas", MemoryCredentialStore(), dir("jonas"), scope)
+        assertEquals(kit, RecoveryLink.parse(kit.url))
         assertTrue(jonas.isAdmin)
         assertEquals("Italien 2026", jonas.state.value.name)
         assertEquals(0, jonas.pendingCount.value)
@@ -198,5 +222,71 @@ class IntegrationTests {
         while (jonas.state.value.members[b]?.name != "Ben & Partner" && System.currentTimeMillis() < deadline) kotlinx.coroutines.delay(100)
         assertEquals("Ben & Partner", jonas.state.value.members[b]?.name)
         jonas.stopLive()
+    }
+
+    /** A creation link from the server owner, lost devices, a reset member and a recovered admin (PROTOCOL.md §5.4 steps 0, 6–9). */
+    @Test
+    fun lostDevicesAndRecovery() = runBlocking {
+        if (server == null) return@runBlocking
+        val tmp = Files.createTempDirectory("ob-it").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            recovery(tmp, scope)
+        } finally {
+            scope.cancel()
+            tmp.deleteRecursively()
+        }
+    }
+
+    private suspend fun recovery(tmp: File, scope: CoroutineScope) {
+        val server = server!!
+        fun dir(name: String) = File(tmp, name)
+
+        // The server owner lets Anna create a group; the code works once.
+        val (code, _) = ServerClient(server).createCreationCode(token, expiresInHours = 1)
+        val creation = assertNotNull(CreationLink.parse(CreationLink(server, code).url))
+        val (anna, kit) = GroupSession.create(server, creation.code, "WG", "EUR", "Anna", MemoryCredentialStore(), dir("anna"), scope)
+        val used = assertFailsWith<FlowError> { GroupSession.create(server, creation.code, "WG 2", "EUR", "Eve", MemoryCredentialStore(), dir("eve"), scope) }
+        assertEquals(FlowError.Kind.CreationCodeUsed, used.kind)
+
+        // Ben joins on his phone and adds his laptop; he loses the phone and removes it from the laptop.
+        val ben = GroupSession.join(anna.addMember("Ben"), null, MemoryCredentialStore(), dir("ben"), scope)
+        val laptop = GroupSession.join(ben.addDevice(), null, MemoryCredentialStore(), dir("laptop"), scope)
+        laptop.removeDevice(ben.me, ben.deviceKey)
+        assertFailsWith<ServerError> { ben.syncNow() }
+        assertTrue(ben.isRemoved)
+        assertEquals(listOf(laptop.deviceKey), laptop.state.value.members[ben.me]?.keys)
+
+        // Then the laptop is lost too: Anna resets Ben, who joins again as himself.
+        val p = Payment(Uuids.v7().lower, Payment.Kind.Expense, "Strom", date = "2026-11-02", amount = 9_000, track = false,
+            inSide = Payment.Side("exact", listOf(Payment.Line(anna.me, 4_500), Payment.Line(ben.me, 4_500))),
+            outSide = Payment.Side("exact", listOf(Payment.Line(laptop.me, 9_000))))
+        laptop.submit(EventData.PaymentCreated(p))
+        laptop.syncNow()
+        anna.syncNow()
+        val again = anna.resetMember(ben.me)
+        runCatching { laptop.syncNow() }
+        assertTrue(laptop.isRemoved)
+        val benNew = GroupSession.join(again, null, MemoryCredentialStore(), dir("benNew"), scope)
+        assertEquals(ben.me, benNew.me)
+        assertEquals(4_500L, benNew.state.value.summary().balances[ben.me])
+
+        // Anna loses her phone and restores the group with her recovery kit.
+        val restored = GroupSession.recover(assertNotNull(RecoveryLink.parse(kit.url)), null, MemoryCredentialStore(), dir("restored"), scope)
+        assertTrue(restored.isAdmin)
+        assertEquals(listOf(restored.deviceKey), restored.state.value.members[anna.me]?.keys)
+        runCatching { anna.syncNow() }
+        assertTrue(anna.isRemoved)
+        assertTrue(!anna.isAdmin)
+
+        // A new kit replaces the old one.
+        val newKit = restored.newRecoveryKit()
+        val replaced = assertFailsWith<FlowError> { GroupSession.recover(kit, null, MemoryCredentialStore(), dir("old-kit"), scope) }
+        assertEquals(FlowError.Kind.RecoveryReplaced, replaced.kind)
+        val restored2 = GroupSession.recover(newKit, null, MemoryCredentialStore(), dir("restored2"), scope)
+        assertTrue(restored2.isAdmin)
+        benNew.syncNow()
+        assertTrue(benNew.state.value.history.all { it.rejection == null })
+        assertEquals(restored2.state.value, benNew.state.value)
     }
 }

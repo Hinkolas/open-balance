@@ -43,6 +43,8 @@ fun TaskScaffold(
     title: String,
     onClose: () -> Unit,
     back: Boolean = false,
+    /** False for screens the user must finish with their own button (the recovery kit). */
+    closable: Boolean = true,
     action: TaskAction? = null,
     actions: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
@@ -54,7 +56,7 @@ fun TaskScaffold(
             TopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
+                    if (closable) IconButton(onClick = onClose) {
                         if (back) {
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back))
                         } else {
