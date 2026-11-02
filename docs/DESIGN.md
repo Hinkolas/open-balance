@@ -25,9 +25,9 @@ both first-class and follow the system.
 - **Sheets** for self-contained tasks (new payment, record arrival, invite,
   join, create group). Cancel leading, the action trailing.
 - **Overview** shows your balance (with the expected balance once pending
-  money arrives), money waiting for arrival, balances, and the 5 latest
-  payments with a `Show all` row (badge = count) that pushes the full,
-  searchable list. Who pays whom is not on it.
+  money arrives), money waiting for arrival, balances, and the 5 most recent
+  payments. A `Show all in History` row (badge = count) switches to the
+  History tab filtered to payments. Who pays whom is not on it.
 - **Settle up** is its own tab with one plan: who pays whom once every
   pending payment has arrived (PROTOCOL.md §9.4), so nothing is paid that a
   pending payment would send back. Each transfer shows what is due now
@@ -44,7 +44,10 @@ both first-class and follow the system.
   title or member name, "what · by whom" below, and amount and time
   trailing. Each line is one line and truncates instead of wrapping (more at
   accessibility sizes). Settle ups are titled "From → To". Ignored events
-  are muted with a red badge and the reason.
+  are muted with a red badge and the reason. A filter menu in the toolbar
+  (filled icon when active, the filter as navigation subtitle) picks
+  Everything, Payments, Arrivals or Members & devices; the search field
+  under the title matches titles and details.
 - **Multi-step tasks** push steps in the sheet's `NavigationStack`: the back
   button and swipe-back work, the trailing button says `Next` until the last
   step, which says `Save`.

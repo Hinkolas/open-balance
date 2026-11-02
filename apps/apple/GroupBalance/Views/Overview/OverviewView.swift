@@ -4,10 +4,12 @@ import LedgerSync
 import SwiftUI
 
 /// The active group at a glance: your balance, money waiting to be
-/// confirmed, everyone's balance line, latest payments. Who pays whom lives
+/// confirmed, everyone's balance line, recent payments. Who pays whom lives
 /// in the Settle up tab.
 struct OverviewView: View {
     let session: GroupSession
+    /// Opens History filtered to payments.
+    let showAllPayments: () -> Void
     @State private var draft: PaymentDraft?
     @State private var arrivalFor: ArrivalTarget?
 
@@ -41,11 +43,6 @@ struct OverviewView: View {
         .toolbar { AddPaymentMenu(session: session, draft: $draft) }
         .refreshable { try? await session.syncNow() }
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
-        .navigationDestination(for: OverviewRoute.self) { route in
-            switch route {
-            case .allPayments: AllPaymentsView(session: session)
-            }
-        }
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
         .sheet(item: $arrivalFor) { ArrivalSheet(session: session, target: $0) }
     }
@@ -143,7 +140,7 @@ struct OverviewView: View {
 
     @ViewBuilder private func recent(_ state: LedgerState) -> some View {
         let payments = state.livePayments.newestFirst
-        Section("Payments") {
+        Section("Recent payments") {
             if payments.isEmpty {
                 Text("Nothing yet. Tap + to add the first payment.").foregroundStyle(.secondary)
             }
@@ -151,18 +148,14 @@ struct OverviewView: View {
                 NavigationLink(value: PaymentRoute(id: r.id)) { PaymentRow(session: session, record: r) }
             }
             if payments.count > recentLimit {
-                NavigationLink(value: OverviewRoute.allPayments) {
-                    Text("Show all")
-                }
-                .badge(payments.count)
+                Button("Show all in History", action: showAllPayments)
+                    .badge(payments.count)
             }
         }
     }
 }
 
 struct PaymentRoute: Hashable { let id: PaymentID }
-
-enum OverviewRoute: Hashable { case allPayments }
 
 extension [PaymentRecord] {
     /// By payment date, then by when they were added; newest first.
@@ -261,7 +254,7 @@ struct PaymentRow: View {
                 .foregroundStyle(Theme.tint)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(p.title).lineLimit(1)
+                Text(title(p)).lineLimit(1)
                 Text(subtitle(p)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -281,8 +274,13 @@ struct PaymentRow: View {
         switch p.displayKind {
         case .income: return String(localized: "\(date) · at \(names(p.in))")
         case .expense: return String(localized: "\(date) · paid by \(names(p.out))")
-        case .settlement: return String(localized: "\(date) · \(names(p.out)) → \(names(p.in))")
+        case .settlement: return date
         }
+    }
+
+    /// Settle ups are about who paid whom, like in History.
+    private func title(_ p: Payment) -> String {
+        p.displayKind == .settlement ? "\(names(p.out)) → \(names(p.in))" : p.title
     }
 
     private func names(_ side: Payment.Side) -> String {

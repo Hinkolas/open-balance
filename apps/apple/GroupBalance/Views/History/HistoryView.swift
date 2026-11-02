@@ -7,14 +7,23 @@ import SwiftUI
 /// marked with the reason, so everyone sees the same thing.
 struct HistoryView: View {
     let session: GroupSession
+    @Binding var filter: HistoryFilter
     @State private var draft: PaymentDraft?
+    @State private var query = ""
 
     var body: some View {
-        let items = Array(session.state.history.reversed())
-        let days = Dictionary(grouping: items) { Dates.timestamp($0.at).map { Calendar.current.startOfDay(for: $0) } ?? .distantPast }
+        let all = session.state.history
+        let shown = all.reversed().filter { filter.includes($0) && matches($0) }
+        let days = Dictionary(grouping: shown) { Dates.timestamp($0.at).map { Calendar.current.startOfDay(for: $0) } ?? .distantPast }
         List {
-            if items.isEmpty {
+            if all.isEmpty {
                 ContentUnavailableView("Nothing yet", systemImage: "clock", description: Text("Everything that happens in the group shows up here."))
+            } else if shown.isEmpty {
+                if query.isEmpty {
+                    ContentUnavailableView(filter.emptyTitle, systemImage: filter.symbol)
+                } else {
+                    ContentUnavailableView.search(text: query)
+                }
             }
             ForEach(days.keys.sorted(by: >), id: \.self) { day in
                 Section(dayTitle(day)) {
@@ -24,10 +33,36 @@ struct HistoryView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("History")
-        .toolbar { AddPaymentMenu(session: session, draft: $draft) }
+        .navigationSubtitle(filter == .all ? "" : filter.label)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Show", selection: $filter) {
+                        ForEach(HistoryFilter.allCases, id: \.self) { f in
+                            Label(f.label, systemImage: f.symbol).tag(f)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Label("Filter", systemImage: filter == .all
+                          ? "line.3.horizontal.decrease.circle"
+                          : "line.3.horizontal.decrease.circle.fill")
+                }
+            }
+            AddPaymentMenu(session: session, draft: $draft)
+        }
         .refreshable { try? await session.syncNow() }
         .navigationDestination(for: PaymentRoute.self) { PaymentDetailView(session: session, paymentID: $0.id) }
         .sheet(item: $draft) { PaymentFlow(session: session, draft: $0) }
+    }
+
+    /// Search over what a row shows: title, detail and who did it.
+    private func matches(_ item: HistoryItem) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        let e = entry(item)
+        return [e.title, e.detail].contains { $0.localizedStandardContains(q) }
     }
 
     private func dayTitle(_ day: Date) -> String {
@@ -219,5 +254,49 @@ struct HistoryRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// What History shows. Overview's "Show all" opens it on `.payments`.
+enum HistoryFilter: CaseIterable, Hashable {
+    case all, payments, arrivals, members
+
+    var label: String {
+        switch self {
+        case .all: String(localized: "Everything")
+        case .payments: String(localized: "Payments")
+        case .arrivals: String(localized: "Arrivals")
+        case .members: String(localized: "Members & devices")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: "list.bullet"
+        case .payments: "eurosign.circle"
+        case .arrivals: "checkmark.circle"
+        case .members: "person.2"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: String(localized: "Nothing yet")
+        case .payments: String(localized: "No payments yet")
+        case .arrivals: String(localized: "No arrivals yet")
+        case .members: String(localized: "No member changes yet")
+        }
+    }
+
+    func includes(_ item: HistoryItem) -> Bool {
+        switch (self, item.data) {
+        case (.all, _): true
+        case (.payments, .paymentCreated?), (.payments, .paymentUpdated?), (.payments, .paymentDeleted?): true
+        case (.arrivals, .arrivalRecorded?), (.arrivals, .arrivalRemoved?): true
+        case (.members, .groupCreated?), (.members, .groupUpdated?), (.members, .memberAdded?),
+             (.members, .memberInviteRenewed?), (.members, .memberClaimed?), (.members, .memberUpdated?),
+             (.members, .memberDeviceInvited?), (.members, .memberDeviceClaimed?), (.members, .memberDeviceInviteRevoked?): true
+        default: false
+        }
     }
 }
