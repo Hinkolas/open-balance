@@ -1,4 +1,4 @@
-# Group Balance – protocol v1
+# Open Balance – protocol v1
 
 Status: draft, 2026-11-01. This document is the contract between the server
 and every client (iOS now, Android and Windows later). If two clients reduce
@@ -77,7 +77,7 @@ Test vectors therefore check verification, not signature bytes.
 is created. It never leaves clients except inside invite QRs.
 
 ```
-K_enc = HKDF-SHA256(ikm = S, salt = groupId(16), info = "group-balance/v1/enc", L = 32)
+K_enc = HKDF-SHA256(ikm = S, salt = groupId(16), info = "open-balance/v1/enc", L = 32)
 ```
 
 ### 3.2 Member keys
@@ -103,7 +103,7 @@ The admin shows a member's invite, and a member's device shows a device
 invite for its own member, as a QR code of the same URL:
 
 ```
-groupbalance://join?v=1&s=<server>&g=<groupId>&m=<memberId>#k=<S>&i=<I>
+openbalance://join?v=1&s=<server>&g=<groupId>&m=<memberId>#k=<S>&i=<I>
 ```
 
 | Param | Value |
@@ -129,11 +129,11 @@ with a matching HTTP status.
 Member and invite requests carry:
 
 ```
-Authorization: GB1 key=<base64url public key>, ts=<unix seconds>, sig=<base64url signature>
+Authorization: OB1 key=<base64url public key>, ts=<unix seconds>, sig=<base64url signature>
 ```
 
 ```
-sig = Ed25519(key, "group-balance/v1/req\n" ‖ METHOD ‖ "\n" ‖ path-and-query ‖ "\n"
+sig = Ed25519(key, "open-balance/v1/req\n" ‖ METHOD ‖ "\n" ‖ path-and-query ‖ "\n"
                    ‖ ts ‖ "\n" ‖ lowercase hex SHA-256(body))
 ```
 
@@ -184,7 +184,7 @@ roadmap.
 | `GET /v1/groups/{g}/stream` | member | Server-sent events, `event: head` / `data: {"seq": n}` on every append and every 30 s |
 | `GET /healthz`, `GET /readyz` | none | probes |
 
-- `proof = Ed25519(memberKey, "group-balance/v1/claim" ‖ groupId(16) ‖ inviteKey(32))`
+- `proof = Ed25519(memberKey, "open-balance/v1/claim" ‖ groupId(16) ‖ inviteKey(32))`
   proves the claimer holds the member private key.
 - **Append** assigns consecutive `seq` values starting at 1 per group, in
   request order, in one transaction. An `id` that already exists in the group
@@ -223,9 +223,9 @@ roadmap.
 
 ```
 blob      = 0x01 ‖ nonce(12) ‖ ChaCha20-Poly1305(K_enc, nonce, plaintext, aad)
-aad       = "group-balance/v1/event" ‖ groupId(16) ‖ eventId(16)
+aad       = "open-balance/v1/event" ‖ groupId(16) ‖ eventId(16)
 plaintext = u32be(len(body)) ‖ body ‖ signature(64) ‖ zero padding
-signature = Ed25519(authorKey, "group-balance/v1/sig" ‖ groupId(16) ‖ eventId(16) ‖ body)
+signature = Ed25519(authorKey, "open-balance/v1/sig" ‖ groupId(16) ‖ eventId(16) ‖ body)
 ```
 
 The plaintext is padded with zero bytes to the next multiple of 256 bytes.
@@ -270,7 +270,7 @@ Every client computes over the server order:
 
 ```
 chain_0 = 32 zero bytes
-chain_n = SHA-256("group-balance/v1/chain" ‖ chain_{n-1} ‖ u64be(n) ‖ eventId_n(16) ‖ SHA-256(blob_n))
+chain_n = SHA-256("open-balance/v1/chain" ‖ chain_{n-1} ‖ u64be(n) ‖ eventId_n(16) ‖ SHA-256(blob_n))
 ```
 
 A client MUST stop applying events and show the group as **inconsistent** if:
@@ -323,7 +323,7 @@ If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 `id`; the event is signed with `key`; and
 
 ```
-inviteSig = Ed25519(current inviteKey of the member, "group-balance/v1/claim" ‖ groupId(16) ‖ key(32))
+inviteSig = Ed25519(current inviteKey of the member, "open-balance/v1/claim" ‖ groupId(16) ‖ key(32))
 ```
 
 must verify. Keys MUST be unique within a group (member keys, current invite
@@ -341,7 +341,7 @@ MUST equal `id` (`forbidden`); `key` MUST be a new key (`invalid_data`);
 `inviteKey` MUST be one of the member's pending device invites and
 
 ```
-inviteSig = Ed25519(inviteKey, "group-balance/v1/claim" ‖ groupId(16) ‖ key(32))
+inviteSig = Ed25519(inviteKey, "open-balance/v1/claim" ‖ groupId(16) ‖ key(32))
 ```
 
 must verify (`bad_invite_sig` otherwise). The event is signed with `key`.

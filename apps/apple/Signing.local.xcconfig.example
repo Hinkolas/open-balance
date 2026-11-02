@@ -5,4 +5,4 @@
 DEVELOPMENT_TEAM = ABCDE12345
 
 // Only if the default id is taken by another team (free Apple IDs included):
-// PRODUCT_BUNDLE_IDENTIFIER = com.yourname.groupbalance
+// PRODUCT_BUNDLE_IDENTIFIER = com.yourname.openbalance

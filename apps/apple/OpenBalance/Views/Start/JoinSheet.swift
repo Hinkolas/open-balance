@@ -29,7 +29,7 @@ struct JoinSheet: View {
                     if DataScannerViewController.isSupported {
                         Section("Scan the QR code") {
                             QRScanner { scanned in
-                                if let l = InviteLink(text: scanned) { link = l } else { error = String(localized: "That QR code is not a Group Balance invite.") }
+                                if let l = InviteLink(text: scanned) { link = l } else { error = String(localized: "That QR code is not a Open Balance invite.") }
                             }
                             .frame(height: 260)
                             .listRowInsets(EdgeInsets())
@@ -37,7 +37,7 @@ struct JoinSheet: View {
                     }
                     #endif
                     Section {
-                        TextField("groupbalance://join?…", text: $pasted, axis: .vertical)
+                        TextField("openbalance://join?…", text: $pasted, axis: .vertical)
                             .font(.footnote.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()

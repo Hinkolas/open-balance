@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// Talks to a Group Balance server: signed requests, invite links, Keychain
+// Talks to a Open Balance server: signed requests, invite links, Keychain
 // credentials, the local ledger cache, outbox and live updates.
 let package = Package(
     name: "LedgerSync",

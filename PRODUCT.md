@@ -52,7 +52,7 @@ counts once its arrival is confirmed, instalment by instalment.
 
 ## Brand Commitments
 
-- Name: Group Balance.
+- Name: Open Balance.
 - Languages: English and German (informal "du").
 - Vocabulary: Income / Eingang, Expense / Ausgabe, Settle up / Begleichen,
   arrived / angekommen, expected / erwartet, settled / quitt.

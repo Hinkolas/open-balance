@@ -13,27 +13,27 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A10000000000000000000008 /* GroupBalance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GroupBalance.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000008 /* OpenBalance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenBalance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000030 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A10000000000000000000010 /* Exceptions for "GroupBalance" folder in "GroupBalance" target */ = {
+		A10000000000000000000010 /* Exceptions for "OpenBalance" folder in "OpenBalance" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = A10000000000000000000007 /* GroupBalance */;
+			target = A10000000000000000000007 /* OpenBalance */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A1000000000000000000000A /* GroupBalance */ = {
+		A1000000000000000000000A /* OpenBalance */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A10000000000000000000010 /* Exceptions for "GroupBalance" folder in "GroupBalance" target */,
+				A10000000000000000000010 /* Exceptions for "OpenBalance" folder in "OpenBalance" target */,
 			);
-			path = GroupBalance;
+			path = OpenBalance;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -55,7 +55,7 @@
 		A1000000000000000000000F = {
 			isa = PBXGroup;
 			children = (
-				A1000000000000000000000A /* GroupBalance */,
+				A1000000000000000000000A /* OpenBalance */,
 				A10000000000000000000030 /* Signing.xcconfig */,
 				A10000000000000000000020 /* Packages */,
 				A10000000000000000000009 /* Products */,
@@ -65,7 +65,7 @@
 		A10000000000000000000009 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A10000000000000000000008 /* GroupBalance.app */,
+				A10000000000000000000008 /* OpenBalance.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,9 +80,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A10000000000000000000007 /* GroupBalance */ = {
+		A10000000000000000000007 /* OpenBalance */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000013 /* Build configuration list for PBXNativeTarget "GroupBalance" */;
+			buildConfigurationList = A10000000000000000000013 /* Build configuration list for PBXNativeTarget "OpenBalance" */;
 			buildPhases = (
 				A10000000000000000000004 /* Sources */,
 				A10000000000000000000005 /* Frameworks */,
@@ -93,16 +93,16 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A1000000000000000000000A /* GroupBalance */,
+				A1000000000000000000000A /* OpenBalance */,
 			);
-			name = GroupBalance;
+			name = OpenBalance;
 			packageProductDependencies = (
 				A1000000000000000000009A /* LedgerCore */,
 				A1000000000000000000009B /* Design */,
 				A1000000000000000000009C /* LedgerSync */,
 			);
-			productName = GroupBalance;
-			productReference = A10000000000000000000008 /* GroupBalance.app */;
+			productName = OpenBalance;
+			productReference = A10000000000000000000008 /* OpenBalance.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -120,7 +120,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A10000000000000000000003 /* Build configuration list for PBXProject "GroupBalance" */;
+			buildConfigurationList = A10000000000000000000003 /* Build configuration list for PBXProject "OpenBalance" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -140,7 +140,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A10000000000000000000007 /* GroupBalance */,
+				A10000000000000000000007 /* OpenBalance */,
 			);
 		};
 /* End PBXProject section */
@@ -297,7 +297,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = GroupBalance/Info.plist;
+				INFOPLIST_FILE = OpenBalance/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -332,7 +332,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = GroupBalance/Info.plist;
+				INFOPLIST_FILE = OpenBalance/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -360,7 +360,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A10000000000000000000003 /* Build configuration list for PBXProject "GroupBalance" */ = {
+		A10000000000000000000003 /* Build configuration list for PBXProject "OpenBalance" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000011 /* Debug */,
@@ -369,7 +369,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A10000000000000000000013 /* Build configuration list for PBXNativeTarget "GroupBalance" */ = {
+		A10000000000000000000013 /* Build configuration list for PBXNativeTarget "OpenBalance" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000014 /* Debug */,

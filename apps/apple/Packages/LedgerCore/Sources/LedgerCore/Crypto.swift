@@ -7,12 +7,12 @@ public enum LedgerCrypto {
     public static let blobVersion: UInt8 = 0x01
     public static let padBlock = 256
 
-    private static let labelEnc = "group-balance/v1/enc"
-    private static let labelEvent = "group-balance/v1/event"
-    private static let labelSig = "group-balance/v1/sig"
-    private static let labelChain = "group-balance/v1/chain"
-    private static let labelReq = "group-balance/v1/req\n"
-    private static let labelClaim = "group-balance/v1/claim"
+    private static let labelEnc = "open-balance/v1/enc"
+    private static let labelEvent = "open-balance/v1/event"
+    private static let labelSig = "open-balance/v1/sig"
+    private static let labelChain = "open-balance/v1/chain"
+    private static let labelReq = "open-balance/v1/req\n"
+    private static let labelClaim = "open-balance/v1/claim"
 
     public enum Failure: Error { case badSecret, notABlob, badPlaintext }
 
@@ -101,11 +101,11 @@ public enum LedgerCrypto {
         return Data("\(labelReq)\(method)\n\(pathAndQuery)\n\(ts)\n\(hash)".utf8)
     }
 
-    /// `Authorization: GB1 key=…, ts=…, sig=…` (§5.1).
+    /// `Authorization: OB1 key=…, ts=…, sig=…` (§5.1).
     public static func authorization(
         signer: Curve25519.Signing.PrivateKey, method: String, pathAndQuery: String, ts: Int64, body: Data
     ) throws -> String {
         let sig = try signer.signature(for: requestSigningInput(method: method, pathAndQuery: pathAndQuery, ts: ts, body: body))
-        return "GB1 key=\(signer.publicKey.rawRepresentation.base64URL), ts=\(ts), sig=\(sig.base64URL)"
+        return "OB1 key=\(signer.publicKey.rawRepresentation.base64URL), ts=\(ts), sig=\(sig.base64URL)"
     }
 }

@@ -1,4 +1,4 @@
-// Command server is the Group Balance server: a headless JSON API that keeps
+// Command server is the Open Balance server: a headless JSON API that keeps
 // the encrypted ledgers of groups (docs/PROTOCOL.md).
 //
 //	server [serve]           run the API
@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KiloHertz-IT/group-balance/internal/api"
-	"github.com/KiloHertz-IT/group-balance/migrations"
+	"github.com/Hinkolas/open-balance/internal/api"
+	"github.com/Hinkolas/open-balance/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
@@ -92,7 +92,7 @@ func serve(ctx context.Context) error {
 	defer pool.Close()
 
 	cfg := api.Config{
-		Name:           envOr("SERVER_NAME", "Group Balance"),
+		Name:           envOr("SERVER_NAME", "Open Balance"),
 		Version:        version,
 		AdminToken:     os.Getenv("ADMIN_TOKEN"),
 		MaxGroupEvents: envInt("MAX_GROUP_EVENTS", 100_000),

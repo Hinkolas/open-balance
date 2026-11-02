@@ -2,7 +2,7 @@
 # Renders AppIcon.icon into the AppIconMark image the app shows in its own UI
 # (e.g. the Welcome screen). Run again after changing the icon in Icon Composer.
 set -eu
-cd "$(dirname "$0")/../GroupBalance"
+cd "$(dirname "$0")/../OpenBalance"
 ictool="$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool"
 out=Assets.xcassets/AppIconMark.imageset
 mkdir -p "$out"

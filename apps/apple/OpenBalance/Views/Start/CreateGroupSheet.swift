@@ -103,7 +103,7 @@ struct AddServerSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://group-balance.example.com", text: $url)
+                    TextField("https://open-balance.example.com", text: $url)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

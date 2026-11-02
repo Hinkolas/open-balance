@@ -849,12 +849,12 @@
         }
       }
     },
-    "Group Balance" : {
+    "Open Balance" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Group Balance"
+            "value" : "Open Balance"
           }
         }
       }
@@ -889,12 +889,12 @@
         }
       }
     },
-    "groupbalance://join?…" : {
+    "openbalance://join?…" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "groupbalance://join?…"
+            "value" : "openbalance://join?…"
           }
         }
       }
@@ -959,12 +959,12 @@
         }
       }
     },
-    "https://group-balance.example.com" : {
+    "https://open-balance.example.com" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "https://group-balance.example.com"
+            "value" : "https://open-balance.example.com"
           }
         }
       }
@@ -1857,12 +1857,12 @@
         }
       }
     },
-    "That QR code is not a Group Balance invite." : {
+    "That QR code is not a Open Balance invite." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieser QR-Code ist keine Group-Balance-Einladung."
+            "value" : "Dieser QR-Code ist keine Open-Balance-Einladung."
           }
         }
       }
@@ -1949,12 +1949,12 @@
         }
       }
     },
-    "This link is not a valid Group Balance invite." : {
+    "This link is not a valid Open Balance invite." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieser Link ist keine gültige Group-Balance-Einladung."
+            "value" : "Dieser Link ist keine gültige Open-Balance-Einladung."
           }
         }
       }

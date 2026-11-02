@@ -1,4 +1,4 @@
-# Group Balance – design system
+# Open Balance – design system
 
 Status: 2026-11-01. Replaces the ported Quitt look (paper, ink, serif). The
 world is **native iOS 26 with a light brand layer**: the platform supplies

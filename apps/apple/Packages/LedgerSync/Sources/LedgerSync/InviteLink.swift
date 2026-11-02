@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import LedgerCore
 
-/// `groupbalance://join?v=1&s=<server>&g=<group>&m=<member>#k=<secret>&i=<invite seed>` (PROTOCOL.md §4).
+/// `openbalance://join?v=1&s=<server>&g=<group>&m=<member>#k=<secret>&i=<invite seed>` (PROTOCOL.md §4).
 public struct InviteLink: Sendable, Equatable {
     public var server: URL
     public var groupID: UUID
@@ -20,7 +20,7 @@ public struct InviteLink: Sendable, Equatable {
 
     public var url: URL {
         var c = URLComponents()
-        c.scheme = "groupbalance"
+        c.scheme = "openbalance"
         c.host = "join"
         c.queryItems = [
             .init(name: "v", value: "1"),
@@ -33,7 +33,7 @@ public struct InviteLink: Sendable, Equatable {
     }
 
     public init?(_ url: URL) {
-        guard url.scheme == "groupbalance", url.host() == "join",
+        guard url.scheme == "openbalance", url.host() == "join",
               let c = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let items = c.queryItems, let fragment = c.fragment
         else { return nil }

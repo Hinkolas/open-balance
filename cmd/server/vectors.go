@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/KiloHertz-IT/group-balance/internal/protocol"
+	"github.com/Hinkolas/open-balance/internal/protocol"
 	"github.com/google/uuid"
 )
 

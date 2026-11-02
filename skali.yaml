@@ -3,7 +3,7 @@
 # One headless Go service plus Postgres. The server stores encrypted blobs
 # only (docs/PROTOCOL.md). ${NAME} values come from .env under `skali dev`
 # and from .env.<environment> (e.g. .env.staging) staged by `skali deploy`.
-name: group-balance
+name: open-balance
 description: End-to-end encrypted group ledger server
 applications:
   server:
@@ -12,7 +12,7 @@ applications:
     environment:
       DATABASE_URL: "{{databases.data.url}}"
       ADMIN_TOKEN: "${ADMIN_TOKEN}"
-      SERVER_NAME: "${SERVER_NAME:-Group Balance}"
+      SERVER_NAME: "${SERVER_NAME:-Open Balance}"
       PORT: "8080"
     ports:
       http:

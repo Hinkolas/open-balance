@@ -48,8 +48,8 @@ public struct KeychainStore: Sendable {
 
     let service: String
 
-    public static let groups = KeychainStore(service: "dev.kilohertz.groupbalance.group")
-    public static let servers = KeychainStore(service: "dev.kilohertz.groupbalance.server-owner")
+    public static let groups = KeychainStore(service: "io.github.hinkolas.openbalance.group")
+    public static let servers = KeychainStore(service: "io.github.hinkolas.openbalance.server-owner")
 
     public init(service: String) { self.service = service }
 

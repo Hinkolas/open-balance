@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KiloHertz-IT/group-balance/internal/protocol"
-	"github.com/KiloHertz-IT/group-balance/migrations"
+	"github.com/Hinkolas/open-balance/internal/protocol"
+	"github.com/Hinkolas/open-balance/migrations"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"

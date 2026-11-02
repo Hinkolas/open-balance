@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/KiloHertz-IT/group-balance/internal/protocol"
-	"github.com/KiloHertz-IT/group-balance/internal/store"
+	"github.com/Hinkolas/open-balance/internal/protocol"
+	"github.com/Hinkolas/open-balance/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

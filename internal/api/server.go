@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KiloHertz-IT/group-balance/internal/protocol"
-	"github.com/KiloHertz-IT/group-balance/internal/store"
+	"github.com/Hinkolas/open-balance/internal/protocol"
+	"github.com/Hinkolas/open-balance/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -119,7 +119,7 @@ type caller struct {
 
 type signedHandler func(w http.ResponseWriter, r *http.Request, c caller)
 
-// signed verifies a GB1 request signature and the key's role in the group (§5.1, §5.2).
+// signed verifies a OB1 request signature and the key's role in the group (§5.1, §5.2).
 func (s *Server) signed(need role, next signedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		group, err := uuid.Parse(r.PathValue("group"))

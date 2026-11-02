@@ -17,7 +17,7 @@ struct WelcomeView: View {
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
                     .accessibilityHidden(true)
-                Text("Group Balance").font(.largeTitle.bold())
+                Text("Open Balance").font(.largeTitle.bold())
                 Text("Who received what, whom it belongs to, what has arrived, and who pays whom. Only members can read it, not even the server.")
                     .font(.body)
                     .foregroundStyle(.secondary)

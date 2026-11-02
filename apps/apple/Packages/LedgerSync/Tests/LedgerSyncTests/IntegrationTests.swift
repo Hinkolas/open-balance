@@ -5,17 +5,17 @@ import Testing
 
 /// End to end against a running server:
 ///   ADMIN_TOKEN=… DATABASE_URL=… go run ./cmd/server
-///   GB_TEST_SERVER=https://group-balance.localhost GB_TEST_OWNER_TOKEN=… swift test
-/// Skipped without GB_TEST_SERVER.
+///   OB_TEST_SERVER=https://open-balance.localhost OB_TEST_OWNER_TOKEN=… swift test
+/// Skipped without OB_TEST_SERVER.
 private let env = ProcessInfo.processInfo.environment
-private let enabled = env["GB_TEST_SERVER"] != nil
+private let enabled = env["OB_TEST_SERVER"] != nil
 
 @MainActor
 @Test(.enabled(if: enabled))
 func twoDevicesShareALedger() async throws {
-    let server = URL(string: env["GB_TEST_SERVER"]!)!
-    let token = env["GB_TEST_OWNER_TOKEN"] ?? ""
-    let tmp = FileManager.default.temporaryDirectory.appending(path: "gb-\(UUID().uuidString)")
+    let server = URL(string: env["OB_TEST_SERVER"]!)!
+    let token = env["OB_TEST_OWNER_TOKEN"] ?? ""
+    let tmp = FileManager.default.temporaryDirectory.appending(path: "ob-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: tmp) }
 
     // Device 1: Jonas creates the group and adds Ben.

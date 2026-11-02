@@ -29,12 +29,12 @@ const (
 	// MaxClockSkew is how far a request timestamp may be from the server clock (§5.1).
 	MaxClockSkewSeconds = 300
 
-	labelEnc   = "group-balance/v1/enc"
-	labelEvent = "group-balance/v1/event"
-	labelSig   = "group-balance/v1/sig"
-	labelChain = "group-balance/v1/chain"
-	labelReq   = "group-balance/v1/req\n"
-	labelClaim = "group-balance/v1/claim"
+	labelEnc   = "open-balance/v1/enc"
+	labelEvent = "open-balance/v1/event"
+	labelSig   = "open-balance/v1/sig"
+	labelChain = "open-balance/v1/chain"
+	labelReq   = "open-balance/v1/req\n"
+	labelClaim = "open-balance/v1/claim"
 )
 
 // B64 is base64url without padding, the encoding for keys, blobs and signatures.
@@ -161,22 +161,22 @@ func RequestSigningInput(method, pathAndQuery string, ts int64, body []byte) []b
 func AuthHeader(priv ed25519.PrivateKey, method, pathAndQuery string, ts int64, body []byte) string {
 	sig := ed25519.Sign(priv, RequestSigningInput(method, pathAndQuery, ts, body))
 	pub := priv.Public().(ed25519.PublicKey)
-	return fmt.Sprintf("GB1 key=%s, ts=%d, sig=%s", B64.EncodeToString(pub), ts, B64.EncodeToString(sig))
+	return fmt.Sprintf("OB1 key=%s, ts=%d, sig=%s", B64.EncodeToString(pub), ts, B64.EncodeToString(sig))
 }
 
-// SignedRequest is a parsed GB1 Authorization header.
+// SignedRequest is a parsed OB1 Authorization header.
 type SignedRequest struct {
 	Key ed25519.PublicKey
 	TS  int64
 	Sig []byte
 }
 
-// ParseAuthHeader parses `GB1 key=…, ts=…, sig=…`.
+// ParseAuthHeader parses `OB1 key=…, ts=…, sig=…`.
 func ParseAuthHeader(h string) (SignedRequest, error) {
 	var r SignedRequest
-	rest, ok := strings.CutPrefix(h, "GB1 ")
+	rest, ok := strings.CutPrefix(h, "OB1 ")
 	if !ok {
-		return r, errors.New("not a GB1 authorization")
+		return r, errors.New("not a OB1 authorization")
 	}
 	for part := range strings.SplitSeq(rest, ",") {
 		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")

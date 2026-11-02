@@ -55,7 +55,7 @@ final class AppModel {
         if let link = InviteLink(url) {
             pendingInvite = link
         } else {
-            toast = String(localized: "This link is not a valid Group Balance invite.")
+            toast = String(localized: "This link is not a valid Open Balance invite.")
         }
     }
 

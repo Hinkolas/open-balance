@@ -1,4 +1,4 @@
-module github.com/KiloHertz-IT/group-balance
+module github.com/Hinkolas/open-balance
 
 go 1.26.5
 

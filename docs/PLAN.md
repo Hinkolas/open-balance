@@ -1,4 +1,4 @@
-# Group Balance – plan
+# Open Balance – plan
 
 Status: 2026-11-01. Protocol: `docs/PROTOCOL.md`. Design: `docs/DESIGN.md`.
 
@@ -32,7 +32,7 @@ of ciphertext and never sees names or amounts.
 | Clients | Native per platform. iOS first: SwiftUI, iOS 26+, Swift 6. Android and Windows later, rewritten against `spec/vectors` | |
 | Language | German and English (String Catalogs), informal "du" in German | |
 | Design | Quitt's visual language (`docs/DESIGN.md`) | |
-| Name | Group Balance, slug `group-balance`, URL scheme `groupbalance://` | |
+| Name | Open Balance, slug `open-balance`, URL scheme `openbalance://` | |
 
 ## Repository layout
 
@@ -44,8 +44,8 @@ internal/
   protocol/            envelope, signatures, request signing (Go reference, used by tests and vectors)
 migrations/  query/  sqlc.yaml  skali.yaml  Dockerfile  go.mod
 apps/apple/
-  GroupBalance.xcodeproj
-  GroupBalance/        app target: shell, views, localization
+  OpenBalance.xcodeproj
+  OpenBalance/        app target: shell, views, localization
   Packages/
     LedgerCore/        crypto, envelope, events, reducer, balances. Pure Swift
     LedgerSync/        API client, outbox, local store, SSE
