@@ -6,14 +6,16 @@ import SwiftUI
 struct WelcomeView: View {
     @State private var showJoin = false
     @State private var showCreate = false
+    @ScaledMetric(relativeTo: .largeTitle) private var iconSize = 96.0
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 16) {
-                Image(systemName: "scalemass.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Theme.tint)
+                Image("AppIconMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
                     .accessibilityHidden(true)
                 Text("Group Balance").font(.largeTitle.bold())
                 Text("Who received what, whom it belongs to, what has arrived, and who pays whom. Only members can read it, not even the server.")
