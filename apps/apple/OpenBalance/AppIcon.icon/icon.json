@@ -63,8 +63,8 @@
             }
           ],
           "glass": true,
-          "image-name": "circle-right.svg",
-          "name": "circle-right",
+          "image-name": "bowl-top.svg",
+          "name": "bowl-top",
           "opacity-specializations": [
             {
               "value": 0.85
@@ -76,7 +76,7 @@
           ]
         }
       ],
-      "name": "Right",
+      "name": "Top",
       "shadow": {
         "kind": "neutral",
         "opacity": 0.4
@@ -126,8 +126,8 @@
             }
           ],
           "glass": true,
-          "image-name": "circle-left.svg",
-          "name": "circle-left",
+          "image-name": "bowl-bottom.svg",
+          "name": "bowl-bottom",
           "opacity-specializations": [
             {
               "value": 0.85
@@ -139,7 +139,7 @@
           ]
         }
       ],
-      "name": "Left",
+      "name": "Bottom",
       "shadow": {
         "kind": "neutral",
         "opacity": 0.4
