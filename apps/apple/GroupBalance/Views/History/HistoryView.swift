@@ -49,6 +49,8 @@ struct HistoryView: View {
                           ? "line.3.horizontal.decrease.circle"
                           : "line.3.horizontal.decrease.circle.fill")
                 }
+                // Plain like the other toolbar buttons; tinted while filtering.
+                .tint(filter == .all ? Color.primary : Theme.tint)
             }
             AddPaymentMenu(session: session, draft: $draft)
         }

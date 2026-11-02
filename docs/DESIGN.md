@@ -18,7 +18,9 @@ both first-class and follow the system.
 - **+ is a toolbar button**, top trailing on Overview, Settle up and
   History, a native `Menu` with Income, Expense, Settle up. Liquid Glass
   renders it as the round glass button, like Apple Music's add and more
-  buttons.
+  buttons. Toolbar icon buttons and their menus are `.tint(.primary)`
+  (white in dark mode, like Apple's apps); the tint marks state only, e.g.
+  History's filter while a filter is on.
 - **Group switcher** is the navigation title menu (`toolbarTitleMenu`).
 - **Lists** are `List` / `Form` with `.insetGrouped` style; sections with
   headers and footers instead of custom labels, cards or hairlines.

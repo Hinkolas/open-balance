@@ -30,6 +30,7 @@ struct PaymentDetailView: View {
                     } label: {
                         Label("More", systemImage: "ellipsis")
                     }
+                    .tint(.primary)
                 }
             }
         }

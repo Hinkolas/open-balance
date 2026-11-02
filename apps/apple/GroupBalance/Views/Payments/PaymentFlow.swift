@@ -17,6 +17,7 @@ struct AddPaymentMenu: ToolbarContent {
             } label: {
                 Label("Add payment", systemImage: "plus")
             }
+            .tint(.primary)
         }
     }
 }
