@@ -48,10 +48,14 @@ open apps/apple/GroupBalance.xcodeproj
 ```
 
 The iOS Simulator has its own trust store. Add the development CA once per
-simulator (it changes only after `skali dev reset`):
+simulator (it changes only after `skali dev reset`). Older dev CAs may still
+be in your keychain, so pick the one that signed the running server's
+certificate (`skali dev` must be running):
 
 ```sh
-security find-certificate -c "skali local dev CA" -p -a ~/Library/Keychains/login.keychain-db /Library/Keychains/System.keychain > /tmp/skali-dev-ca.pem
+CA=$(echo | openssl s_client -connect 127.0.0.1:443 -servername group-balance.localhost 2>/dev/null \
+  | openssl x509 -noout -issuer -nameopt multiline | sed -n 's/^ *commonName *= //p')
+security find-certificate -c "$CA" -p ~/Library/Keychains/login.keychain-db /Library/Keychains/System.keychain > /tmp/skali-dev-ca.pem
 xcrun simctl keychain booted add-root-cert /tmp/skali-dev-ca.pem
 ```
 
