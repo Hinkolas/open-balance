@@ -103,3 +103,9 @@ open apps/apple/OpenBalance.xcodeproj
 **Server.** The phone can't reach `open-balance.localhost`. Use staging,
 `https://group-balance.staging.khz.dev`, with the `ADMIN_TOKEN` from
 `.env.staging`.
+
+## License
+
+Open Balance is free software under the [GNU Affero General Public License
+v3.0](LICENSE). If you run a modified server for others, you must offer them
+its source code.
