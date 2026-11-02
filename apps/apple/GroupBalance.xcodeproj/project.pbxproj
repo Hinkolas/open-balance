@@ -298,7 +298,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GroupBalance/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Group Balance";
+				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -333,7 +333,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GroupBalance/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Group Balance";
+				INFOPLIST_KEY_CFBundleDisplayName = Balance;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scans the QR code of a group invite.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
