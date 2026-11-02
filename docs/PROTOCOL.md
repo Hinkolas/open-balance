@@ -1,6 +1,6 @@
 # Open Balance – protocol v1
 
-Status: draft, 2026-11-01. This document is the contract between the server
+Status: draft, 2026-11-02. This document is the contract between the server
 and every client (iOS now, Android and Windows later). If two clients reduce
 the same ledger differently, members see different balances, so every rule
 here is normative. Change `spec/vectors/*.json` together with this file, then
@@ -23,6 +23,8 @@ member key (Ed25519, one per device of a member, per group)
   ├─ signs every event          clients verify: who wrote what
   └─ signs every request        server verifies: who may read/write
 invite key (Ed25519, one-time)  lets a new device register its member key
+recovery key (Ed25519, one per group, kept offline by the admin)
+  └─ replaces the admin's devices after they are all lost
 ```
 
 In short: **one key per group for reading, one or more keys per member for
@@ -34,17 +36,30 @@ device of the member writes as that member.
 | Group secret `S` | every member | read: decrypt the ledger |
 | Member key | one device of a member (a member may have several) | write: sign events and server requests; identifies the member |
 | Invite key | one pending device, once | join: swap itself for a member key |
+| Recovery key | the admin, outside the app (a password manager) | recover: register a new admin device, removing the old ones |
 
 `K_enc` is symmetric, so a holder of `S` could also produce ciphertext. That
 grants no write access: the server only accepts appends signed by a
 registered member key, and clients only apply events whose inner signature
 matches the author's member key.
 
+Keys form a tree. The admin's key is the root of a group: the admin adds
+members, and each member's first device claims its seat with a one-time
+invite. After that only the member itself adds further devices. Every device
+generates its own key and no key ever leaves the device that made it, except
+the recovery key, which the admin keeps outside the app.
+
+The server owner's `ADMIN_TOKEN` approves the creation of groups and nothing
+else: it gives no key of any group and no way to read one (§5.4).
+
 What the server learns: group ids, the member public keys of a group and their
 role, which key wrote which event and when, blob sizes (padded), IP addresses.
 What it cannot do: read events, write valid events (it has no `K_enc`),
 forge a member's events (no private keys), reorder or rewrite history without
 clients noticing (hash chain, §6.4). It can withhold the newest events.
+A removed device (§7.3) still holds `S`: it is cut off because the server
+stops serving it, so a server operator who also holds a removed device could
+still read the group (key epochs, §11, would close that).
 
 ## 2. Primitives and encodings
 
@@ -82,13 +97,18 @@ K_enc = HKDF-SHA256(ikm = S, salt = groupId(16), info = "open-balance/v1/enc", L
 
 ### 3.2 Member keys
 
-Every device of a member has an Ed25519 key pair for this group, generated on
-that device. All keys of a member are equal: each writes as the member. Clients
-SHOULD store the private key in a synced, end-to-end encrypted store (iOS:
-iCloud Keychain, synchronizable, accessible after first unlock) so a person's
-own devices share one key; further keys are for devices that can't share it
-(another person of the same member, another platform). A member gets its first
-key by claiming its seat and every further key through a device invite (§7.3).
+Every device of a member has its own Ed25519 key pair for this group,
+generated on that device. All keys of a member are equal: each writes as the
+member. A member gets its first key by claiming its seat and every further key
+through a device invite (§7.3).
+
+Clients MUST keep the group secret, member private keys and invite seeds on
+the device: not synced, not in backups, not exportable (iOS: Keychain with
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`; Android: sealed with an
+Android Keystore key in no-backup storage). A lost device stays lost: another
+device of the member, or the admin, removes its key (§7.3), and a new device
+joins with a device invite. If a member has lost every device, the admin
+resets the member (§5.4 step 7).
 
 ### 3.3 Invite keys
 
@@ -97,7 +117,26 @@ An invite key is an Ed25519 key pair derived from a 32-byte random seed `I`
 member (its first device); a claimed member creates one for each further
 device of its own. Each is valid for exactly one claim.
 
-## 4. Invite link
+### 3.4 Recovery key
+
+A recovery key is an Ed25519 key pair derived from a 32-byte random seed `R`.
+The admin's device creates it with the group and whenever the admin asks for a
+new one, shows it once as a recovery link (§4) for the admin to keep in a
+password manager, and then forgets `R`: clients MUST NOT store it. Its public
+key is in the ledger (§7.1, §7.2) and in the server's key registry (role
+`recovery`). With it, a new device takes over the admin's seat (§7.3
+`member.recovered`):
+
+```
+recoverySig = Ed25519(R, "open-balance/v1/recover" ‖ groupId(16) ‖ key(32))
+```
+
+The recovery link holds `S` and `R`. Whoever has it can read the group and
+act as its admin.
+
+## 4. Links
+
+### 4.1 Invite link
 
 The admin shows a member's invite, and a member's device shows a device
 invite for its own member, as a QR code of the same URL:
@@ -118,6 +157,26 @@ openbalance://join?v=1&s=<server>&g=<groupId>&m=<memberId>#k=<S>&i=<I>
 Secrets sit in the fragment so a link pasted into a browser never sends them
 anywhere. Anyone holding the link can claim the seat until it is claimed;
 afterwards it is useless (the server rejects the invite key).
+
+### 4.2 Recovery link
+
+```
+openbalance://recover?v=1&s=<server>&g=<groupId>&m=<adminId>#k=<S>&r=<R>
+```
+
+`v`, `s`, `g` and `k` as in §4.1; `m` is the admin's member id; `r` is the
+base64url recovery seed `R` (§3.4). It works until the admin replaces the
+recovery key.
+
+### 4.3 Creation link
+
+The server owner gives the person who will create and administer a group:
+
+```
+openbalance://create?v=1&s=<server>#c=<code>
+```
+
+`c` is a creation code (§5.3), used up by the first group created with it.
 
 ## 5. Server API
 
@@ -144,48 +203,73 @@ the path with the required role and status. Replays inside the window are
 harmless: reads are reads and appends are idempotent.
 
 Server-owner requests carry `Authorization: Bearer <ADMIN_TOKEN>` (the server
-owner's secret, an environment value). Compared in constant time.
+owner's secret, an environment value). Compared in constant time. Creating a
+group also accepts `Authorization: Bearer <creation code>` (§5.3); the server
+stores only the SHA-256 of a code.
 
 ### 5.2 Key registry (server side)
 
-Per group the server keeps `(publicKey, role, status)`, and for invites the
-key that created it and the role it grants:
+Per group the server keeps `(publicKey, role, status, seat)`, and for invites
+the key that created it and the role it grants:
 
 | role | status | may |
 |---|---|---|
-| `admin` | `active` | everything a member may, plus revoke any invite and create invites that grant `admin` |
-| `member` | `active` | read and append events, read stream, create invites that grant `member`, revoke invites it created |
+| `admin` | `active` | everything a member may, plus remove any key, revoke any invite, create invites that grant `admin`, replace the recovery key |
+| `member` | `active` | read and append events, read stream, create invites that grant `member`, revoke invites it created, remove keys of its own seat |
+| `recovery` | `active` | recover only |
 | `invite` | `pending` | claim only |
-| `invite` | `claimed`, `revoked` | nothing |
+| any | `claimed`, `revoked`, `removed` | nothing |
 
-The server can't tell members apart (it never sees the ledger), so it lets any
-member create invites; which member an invite belongs to and who may create it
-is decided in the ledger (§7.3). A key registered through an invite the ledger
+A **seat** is the server's view of a member, which it can't see otherwise:
+the admin key from group creation and every key from an invite that grants
+`admin` or comes from the recovery key share the admin's seat; a key from an
+invite a member created shares that member's seat; a key from an invite the
+admin created that grants `member` starts a new seat (a new member, or a
+member the admin reset). Seats let a member remove its own devices and
+nobody else's.
+
+The server can't tell members apart in the ledger, so it lets any member
+create invites; which member an invite belongs to and who may create it is
+decided in the ledger (§7.3). A key registered through an invite the ledger
 doesn't back can read, as anyone holding a QR code could, but its events are
 invalid.
 
+When a key is removed, the pending invites it created are revoked with it.
+
 v1 has exactly one admin per group: the creator, on each of its devices.
-Removing members and devices (status `removed`) and more admins are on the
-roadmap.
+Removing members from a group entirely and more admins are on the roadmap.
 
 ### 5.3 Endpoints
 
 | Method and path | Auth | Body → response |
 |---|---|---|
 | `GET /v1/info` | none | → `{name, version, protocols: [1]}` |
-| `POST /v1/groups` | owner | `{groupId, adminKey}` → 201. Registers the group and its admin key. |
+| `POST /v1/groups` | owner or creation code | `{groupId, adminKey, recoveryKey}` → 201. Registers the group, its admin key and its recovery key. Uses up the creation code. |
+| `POST /v1/admin/creation-codes` | owner | `{expiresInHours?}` → 201 `{id, code, expiresAt}`. A one-time code that lets its holder create one group. `expiresInHours` 1–720, default 168. |
+| `GET /v1/admin/creation-codes` | owner | → `{codes: [{id, createdAt, expiresAt, usedAt, groupId}]}` (never the code) |
+| `DELETE /v1/admin/creation-codes/{id}` | owner | → 204. Withdraws an unused code. |
 | `GET /v1/admin/groups` | owner | → `{groups: [{groupId, createdAt, lastWriteAt, events, bytes}]}` |
 | `DELETE /v1/admin/groups/{g}` | owner | → 204. Deletes the group and all events. |
 | `POST /v1/groups/{g}/invites` | member | `{inviteKey, role?}` → 201. `role` is what the claimed key gets: `member` (default) or `admin` (admin callers only, for the admin's own devices). |
 | `DELETE /v1/groups/{g}/invites/{inviteKey}` | member | → 204 (pending → revoked). The admin may revoke any invite, a member only those it created. |
-| `POST /v1/groups/{g}/claim` | invite | `{memberKey, proof}` → 200. Atomically: invite pending → claimed, memberKey registered with the invite's role, `active`. |
+| `POST /v1/groups/{g}/claim` | invite | `{memberKey, proof}` → 200. Atomically: invite pending → claimed, memberKey registered with the invite's role and seat, `active`. |
+| `DELETE /v1/groups/{g}/keys/{key}` | member | → 204. An `admin` or `member` key → `removed`, and its pending invites → `revoked`. The admin may remove any such key, a member only keys of its own seat. |
+| `PUT /v1/groups/{g}/recovery` | admin | `{recoveryKey}` → 204. The current recovery key → `removed`, `recoveryKey` registered as `recovery`. |
+| `POST /v1/groups/{g}/recover` | recovery | `{memberKey, proof}` → 200. Atomically: every key of the admin's seat → `removed` and their pending invites → `revoked`; memberKey registered as `admin` in the admin's seat. The recovery key stays. |
 | `POST /v1/groups/{g}/events` | member | `{events: [{id, blob}]}` → `{events: [{id, seq}]}` |
 | `GET /v1/groups/{g}/events?after=<seq>&limit=<n>` | member | → `{events: [{seq, id, blob, authorKey, receivedAt}], head}` |
 | `GET /v1/groups/{g}/stream` | member | Server-sent events, `event: head` / `data: {"seq": n}` on every append and every 30 s |
 | `GET /healthz`, `GET /readyz` | none | probes |
 
-- `proof = Ed25519(memberKey, "open-balance/v1/claim" ‖ groupId(16) ‖ inviteKey(32))`
-  proves the claimer holds the member private key.
+- `proof = Ed25519(memberKey, "open-balance/v1/claim" ‖ groupId(16) ‖ signingKey(32))`
+  proves the claimer holds the member private key. `signingKey` is the key
+  the request is signed with: the invite key for `claim`, the recovery key
+  for `recover`.
+- A **creation code** is 32 random bytes, base64url. The server stores its
+  SHA-256, expiry and, once used, the group it created. An expired, used or
+  withdrawn code is rejected with 401.
+- Keys are unique per group: registering a key the group has seen before, in
+  any role and status, fails with 409.
 - **Append** assigns consecutive `seq` values starting at 1 per group, in
   request order, in one transaction. An `id` that already exists in the group
   returns its existing `seq` and is not stored twice. `blob` is base64url,
@@ -197,13 +281,20 @@ roadmap.
 - Quotas (configurable): events per group, bytes per group, appends per
   minute per key. Exceeding them returns 429.
 
-### 5.4 Group creation and join flow
+### 5.4 Group flows
 
-1. **Create** (admin device, with the server's `ADMIN_TOKEN`): generate
-   `groupId` (UUIDv7), `S`, member id and admin key → `POST /v1/groups` →
-   append `group.created` (§7.1) signed by the admin key.
+0. **Approve** (server owner): `POST /v1/admin/creation-codes` → give the
+   creation link (§4.3) to the person who will create the group. The server
+   owner holds no key of the group and can't read it. A server owner who
+   wants a group of their own creates it with `ADMIN_TOKEN` directly; that
+   makes them the admin of that group only.
+1. **Create** (the future admin's device, with a creation code or
+   `ADMIN_TOKEN`): generate `groupId` (UUIDv7), `S`, member id, admin key and
+   recovery seed `R` → `POST /v1/groups` → append `group.created` (§7.1)
+   signed by the admin key → show the recovery link (§4.2) once, then forget
+   `R`.
 2. **Add member** (admin): generate member id and invite seed `I` →
-   `POST …/invites {inviteKey}` → append `member.added` → show the QR (§4).
+   `POST …/invites {inviteKey}` → append `member.added` → show the QR (§4.1).
 3. **Join** (new member): scan → generate member key →
    `POST …/claim` signed with the invite key → read the ledger → append
    `member.claimed` (§7.3) signed with the new member key.
@@ -212,10 +303,23 @@ roadmap.
 5. **Add a device** (any device of a claimed member, for its own member):
    generate invite seed `I` → `POST …/invites {inviteKey, role}` (`admin` if
    the member is the admin) → append `member.device_invited` → show the QR
-   (§4). The new device scans, claims like step 3 and appends
+   (§4.1). The new device scans, claims like step 3 and appends
    `member.device_claimed` instead of `member.claimed`. A pending device
    invite is withdrawn with `DELETE …/invites/{key}` and
    `member.device_invite_revoked`.
+6. **Remove a device** (another device of the member, or the admin): append
+   `member.device_removed`, then `DELETE …/keys/{key}`. The removed device
+   can't read or write any more.
+7. **Reset a member** (admin, when the member lost every device): for each of
+   its keys step 6, then like step 4 with a new invite for the member's new
+   first device. The member keeps its id, name, payments and balance.
+8. **Recover** (the admin lost every device): open the recovery link →
+   generate a member key → `POST …/recover` signed with the recovery key →
+   read the ledger → append `member.recovered` (§7.3). Pending invites of the
+   old admin devices no longer work; the admin renews them (step 4).
+9. **New recovery key** (admin): generate `R` → `PUT …/recovery` → append
+   `group.recovery_changed` → show the new recovery link once. The old link
+   stops working.
 
 ## 6. Event envelope
 
@@ -291,19 +395,23 @@ All ids in `data` are UUID strings. `name`: 1–100 characters, `title`: 1–200
 ### 7.1 `group.created`
 
 ```json
-{ "name": "Italien 2026", "currency": "EUR", "admin": { "id": "…", "name": "Jonas", "key": "…" } }
+{ "name": "Italien 2026", "currency": "EUR", "admin": { "id": "…", "name": "Jonas", "key": "…" }, "recoveryKey": "…" }
 ```
 
 MUST be the event with `seq = 1` and the only `group.created`. `currency` is
 an ISO 4217 code and fixed for the life of the group; its minor-unit exponent
 comes from ISO 4217 (EUR 2, JPY 0). `author` MUST equal `admin.id`; the event
 is signed with `admin.key`. The admin is a claimed member from the start.
+`recoveryKey` is the public recovery key (§3.4), different from `admin.key`.
 
 If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 
-### 7.2 `group.updated`
+### 7.2 `group.updated`, `group.recovery_changed`
 
-`{ "name": "…" }`. Admin only.
+`group.updated`: `{ "name": "…" }`. Admin only.
+
+`group.recovery_changed`: `{ "recoveryKey": "…" }`. Admin only. `recoveryKey`
+MUST be a new key; it replaces the current recovery key.
 
 ### 7.3 Members
 
@@ -316,6 +424,13 @@ If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 | `member.device_invited` | `{ "id", "inviteKey" }` | the member itself |
 | `member.device_claimed` | `{ "id", "key", "inviteKey", "inviteSig" }` | the member itself, see below |
 | `member.device_invite_revoked` | `{ "id", "inviteKey" }` | the member itself or admin |
+| `member.device_removed` | `{ "id", "key" }` | the member itself or admin |
+| `member.recovered` | `{ "id", "key", "recoverySig" }` | the admin, see below |
+
+A member is **claimed** while it has at least one key. Every key an event
+introduces (`admin.key`, `recoveryKey`, `inviteKey`, `key`) MUST be new: it
+must not have appeared in any earlier valid event of the group, in any role
+(`invalid_data`). Keys are never reused, even after they are removed.
 
 `member.added`: `id` must be new.
 
@@ -326,10 +441,9 @@ If `seq = 1` is not a valid `group.created`, the whole group is invalid.
 inviteSig = Ed25519(current inviteKey of the member, "open-balance/v1/claim" ‖ groupId(16) ‖ key(32))
 ```
 
-must verify. Keys MUST be unique within a group (member keys, current invite
-keys and pending device invite keys). After the first valid claim the member
-is **claimed** with that key; later `member.claimed` events are invalid
-(`already_claimed`).
+must verify. After a valid claim the member is claimed with that key and has
+no invite key any more; `member.claimed` events for a claimed member are
+invalid (`already_claimed`).
 
 `member.device_invited`: `author` MUST equal `id`, so only a claimed member
 invites devices for itself; the admin adds a member's first device through
@@ -350,7 +464,27 @@ Then `key` is one more key of the member and the invite is no longer pending.
 `member.device_invite_revoked`: the member must exist and `inviteKey` must be
 one of its pending device invites (`unknown_target`); it is no longer pending.
 
-`member.removed` is reserved for the roadmap.
+`member.device_removed`: the member must exist (`unknown_target`); `author`
+MUST equal `id` or be the admin (`forbidden`); `key` MUST be one of the
+member's keys (`unknown_target`). The key is no longer the member's: events
+it signs later fail with `bad_signature`. If it was the member's last key, the
+member is unclaimed again (a seat others record payments for), has no invite
+key and no pending device invites; the admin gives it a new invite with
+`member.invite_renewed`.
+
+`member.recovered`: `id` MUST be the admin and `author` MUST equal `id`
+(`forbidden`); `key` MUST be new (`invalid_data`); the event is signed with
+`key`; and
+
+```
+recoverySig = Ed25519(current recovery key, "open-balance/v1/recover" ‖ groupId(16) ‖ key(32))
+```
+
+must verify (`bad_recovery_sig` otherwise). Then `key` is the admin's only
+key: all its earlier keys are removed and its pending device invites are
+dropped.
+
+`member.removed` (leaving a group entirely) is reserved for the roadmap.
 
 ### 7.4 Payments
 
@@ -446,6 +580,7 @@ For each event in ledger order:
    | `misplaced` | `group.created` anywhere but `seq = 1` |
    | `already_claimed` | claiming or renewing a member that is claimed |
    | `bad_invite_sig` | `inviteSig` doesn't verify with the member's current invite key |
+   | `bad_recovery_sig` | `recoverySig` doesn't verify with the group's current recovery key |
 
 8. Apply.
 
@@ -458,8 +593,8 @@ reason, so everyone sees the same thing and who caused it.
 ### 8.2 Author keys
 
 - `group.created`: `data.admin.key`.
-- `member.claimed`, `member.device_claimed`: `data.key` (the device is
-  claiming).
+- `member.claimed`, `member.device_claimed`, `member.recovered`: `data.key`
+  (the device is claiming).
 - every other type: the keys of the claimed member `author`; the signature
   must verify with one of them. Unclaimed members cannot author events.
 
@@ -564,8 +699,9 @@ several transfers.
 
 ## 11. Roadmap hooks
 
-Reserved and not implemented in v1: `member.removed` plus server key status
-`removed`, key epochs (`K_enc` rotation after a removal, announced inside the
-ledger, new members get only the new epoch), several admins, encrypted
+Reserved and not implemented in v1: `member.removed` (a member leaves the
+group entirely), key epochs (`K_enc` rotation after a device is removed, so
+a removed device can't read what comes after even with the server's help),
+several admins, encrypted
 snapshots for long ledgers, encrypted attachments, push notifications
 ("group changed", no content).

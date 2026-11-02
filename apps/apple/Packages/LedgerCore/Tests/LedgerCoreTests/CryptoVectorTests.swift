@@ -5,11 +5,12 @@ import Testing
 
 struct CryptoFile: Decodable {
     struct KeyPair: Decodable { var seed: String; var publicKey: String }
-    struct Keys: Decodable { var groupSecret: String; var groupId: String; var encKey: String; var admin: KeyPair; var member: KeyPair; var invite: KeyPair }
+    struct Keys: Decodable { var groupSecret: String; var groupId: String; var encKey: String; var admin: KeyPair; var member: KeyPair; var invite: KeyPair; var recovery: KeyPair }
     struct Event: Decodable { var seq: UInt64; var id: String; var nonce: String; var body: String; var authorPublicKey: String; var signature: String; var blob: String; var chain: String }
     struct Req: Decodable { var method: String; var pathAndQuery: String; var ts: Int64; var body: String; var signingInput: String; var authorization: String }
     struct Claim: Decodable { var proof: String; var inviteSig: String }
-    var keys: Keys; var events: [Event]; var requests: [Req]; var claim: Claim
+    struct Recover: Decodable { var signingInputHex: String; var proof: String; var recoverySig: String }
+    var keys: Keys; var events: [Event]; var requests: [Req]; var claim: Claim; var recover: Recover
 }
 
 private func b(_ s: String) -> Data { Data(base64URL: s)! }
@@ -51,4 +52,12 @@ private func b(_ s: String) -> Data { Data(base64URL: s)! }
     let invite = try Curve25519.Signing.PublicKey(rawRepresentation: b(v.keys.invite.publicKey))
     #expect(member.isValidSignature(b(v.claim.proof), for: LedgerCrypto.claimInput(groupID: group, key: b(v.keys.invite.publicKey))))
     #expect(invite.isValidSignature(b(v.claim.inviteSig), for: LedgerCrypto.claimInput(groupID: group, key: b(v.keys.member.publicKey))))
+
+    let recovery = try Curve25519.Signing.PrivateKey(rawRepresentation: b(v.keys.recovery.seed))
+    #expect(recovery.publicKey.rawRepresentation == b(v.keys.recovery.publicKey))
+    let recoverInput = LedgerCrypto.recoverInput(groupID: group, key: b(v.keys.member.publicKey))
+    #expect(recoverInput.hex == v.recover.signingInputHex)
+    #expect(recovery.publicKey.isValidSignature(b(v.recover.recoverySig), for: recoverInput))
+    #expect(member.isValidSignature(b(v.recover.proof), for: LedgerCrypto.claimInput(groupID: group, key: b(v.keys.recovery.publicKey))))
+    #expect(!recovery.publicKey.isValidSignature(b(v.recover.recoverySig), for: LedgerCrypto.claimInput(groupID: group, key: b(v.keys.member.publicKey))))
 }

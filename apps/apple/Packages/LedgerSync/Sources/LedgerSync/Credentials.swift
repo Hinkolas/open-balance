@@ -4,7 +4,7 @@ import LedgerCore
 import Security
 
 /// Everything a device needs to act as one member of one group. Stored in the
-/// Keychain, synced through iCloud Keychain to the person's other devices.
+/// Keychain of this device only: never synced, never in a backup (PROTOCOL.md §3.2).
 public struct GroupCredentials: Codable, Sendable, Equatable, Identifiable {
     public var server: URL
     public var groupID: UUID
@@ -38,8 +38,9 @@ public struct GroupCredentials: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-/// Generic-password Keychain items holding JSON. Items are synchronizable
-/// (iCloud Keychain, end-to-end encrypted) and readable after first unlock.
+/// Generic-password Keychain items holding JSON. Items stay on this device
+/// (no iCloud Keychain, not in backups) and are readable after first unlock,
+/// so sync works in the background.
 public struct KeychainStore: Sendable {
     public struct Failure: Error, CustomStringConvertible {
         public let status: OSStatus
@@ -57,7 +58,6 @@ public struct KeychainStore: Sendable {
         var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
         ]
         if let account { q[kSecAttrAccount as String] = account }
         return q
@@ -70,14 +70,8 @@ public struct KeychainStore: Sendable {
         guard status == errSecItemNotFound else { throw Failure(status: status) }
         var add = base(account)
         add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        add[kSecAttrSynchronizable as String] = kCFBooleanTrue
-        var s = SecItemAdd(add as CFDictionary, nil)
-        if s == errSecMissingEntitlement || s == -34018 {
-            // No iCloud Keychain (e.g. unsigned simulator builds): keep it on this device.
-            add[kSecAttrSynchronizable as String] = kCFBooleanFalse
-            s = SecItemAdd(add as CFDictionary, nil)
-        }
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let s = SecItemAdd(add as CFDictionary, nil)
         guard s == errSecSuccess else { throw Failure(status: s) }
     }
 
@@ -101,6 +95,14 @@ public struct KeychainStore: Sendable {
 
     public func delete(account: String) {
         SecItemDelete(base(account) as CFDictionary)
+    }
+
+    /// Delete copies earlier builds kept in iCloud Keychain, here and so on
+    /// every device of the person.
+    public func deleteSynced() {
+        var q = base()
+        q[kSecAttrSynchronizable as String] = kCFBooleanTrue
+        SecItemDelete(q as CFDictionary)
     }
 }
 

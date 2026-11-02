@@ -28,6 +28,7 @@ public struct EventHeader: Codable, Sendable, Equatable {
 public enum EventData: Sendable, Equatable {
     case groupCreated(GroupCreated)
     case groupUpdated(GroupUpdated)
+    case groupRecoveryChanged(GroupRecoveryChanged)
     case memberAdded(MemberAdded)
     case memberInviteRenewed(MemberInviteRenewed)
     case memberClaimed(MemberClaimed)
@@ -35,6 +36,8 @@ public enum EventData: Sendable, Equatable {
     case memberDeviceInvited(MemberDeviceInvite)
     case memberDeviceClaimed(MemberDeviceClaimed)
     case memberDeviceInviteRevoked(MemberDeviceInvite)
+    case memberDeviceRemoved(MemberDeviceRemoved)
+    case memberRecovered(MemberRecovered)
     case paymentCreated(Payment)
     case paymentUpdated(Payment)
     case paymentDeleted(PaymentDeleted)
@@ -46,6 +49,7 @@ public enum EventData: Sendable, Equatable {
         switch self {
         case .groupCreated: "group.created"
         case .groupUpdated: "group.updated"
+        case .groupRecoveryChanged: "group.recovery_changed"
         case .memberAdded: "member.added"
         case .memberInviteRenewed: "member.invite_renewed"
         case .memberClaimed: "member.claimed"
@@ -53,6 +57,8 @@ public enum EventData: Sendable, Equatable {
         case .memberDeviceInvited: "member.device_invited"
         case .memberDeviceClaimed: "member.device_claimed"
         case .memberDeviceInviteRevoked: "member.device_invite_revoked"
+        case .memberDeviceRemoved: "member.device_removed"
+        case .memberRecovered: "member.recovered"
         case .paymentCreated: "payment.created"
         case .paymentUpdated: "payment.updated"
         case .paymentDeleted: "payment.deleted"
@@ -67,6 +73,8 @@ public struct GroupCreated: Codable, Sendable, Equatable {
     public var name: String
     public var currency: String
     public var admin: Admin
+    /// Public recovery key (§3.4).
+    public var recoveryKey: String
     public struct Admin: Codable, Sendable, Equatable {
         public var id: MemberID
         public var name: String
@@ -77,16 +85,23 @@ public struct GroupCreated: Codable, Sendable, Equatable {
             self.key = key
         }
     }
-    public init(name: String, currency: String, admin: Admin) {
+    public init(name: String, currency: String, admin: Admin, recoveryKey: String) {
         self.name = name
         self.currency = currency
         self.admin = admin
+        self.recoveryKey = recoveryKey
     }
 }
 
 public struct GroupUpdated: Codable, Sendable, Equatable {
     public var name: String
     public init(name: String) { self.name = name }
+}
+
+/// `group.recovery_changed` (§7.2): a new recovery key replaces the current one.
+public struct GroupRecoveryChanged: Codable, Sendable, Equatable {
+    public var recoveryKey: String
+    public init(recoveryKey: String) { self.recoveryKey = recoveryKey }
 }
 
 public struct MemberAdded: Codable, Sendable, Equatable {
@@ -150,6 +165,28 @@ public struct MemberDeviceClaimed: Codable, Sendable, Equatable {
         self.key = key
         self.inviteKey = inviteKey
         self.inviteSig = inviteSig
+    }
+}
+
+/// `member.device_removed` (§7.3): one of the member's keys stops counting.
+public struct MemberDeviceRemoved: Codable, Sendable, Equatable {
+    public var id: MemberID
+    public var key: String
+    public init(id: MemberID, key: String) {
+        self.id = id
+        self.key = key
+    }
+}
+
+/// `member.recovered` (§7.3): the recovery key hands the admin's seat to a new device.
+public struct MemberRecovered: Codable, Sendable, Equatable {
+    public var id: MemberID
+    public var key: String
+    public var recoverySig: String
+    public init(id: MemberID, key: String, recoverySig: String) {
+        self.id = id
+        self.key = key
+        self.recoverySig = recoverySig
     }
 }
 
@@ -260,12 +297,15 @@ public enum EventCoding {
         switch data {
         case .groupCreated(let d): return try enc(d)
         case .groupUpdated(let d): return try enc(d)
+        case .groupRecoveryChanged(let d): return try enc(d)
         case .memberAdded(let d): return try enc(d)
         case .memberInviteRenewed(let d): return try enc(d)
         case .memberClaimed(let d): return try enc(d)
         case .memberUpdated(let d): return try enc(d)
         case .memberDeviceInvited(let d), .memberDeviceInviteRevoked(let d): return try enc(d)
         case .memberDeviceClaimed(let d): return try enc(d)
+        case .memberDeviceRemoved(let d): return try enc(d)
+        case .memberRecovered(let d): return try enc(d)
         case .paymentCreated(let d), .paymentUpdated(let d): return try enc(d)
         case .paymentDeleted(let d): return try enc(d)
         case .arrivalRecorded(let d): return try enc(d)
@@ -285,6 +325,7 @@ public enum EventCoding {
         let data: EventData = switch h.type {
         case "group.created": .groupCreated(try dec(GroupCreated.self))
         case "group.updated": .groupUpdated(try dec(GroupUpdated.self))
+        case "group.recovery_changed": .groupRecoveryChanged(try dec(GroupRecoveryChanged.self))
         case "member.added": .memberAdded(try dec(MemberAdded.self))
         case "member.invite_renewed": .memberInviteRenewed(try dec(MemberInviteRenewed.self))
         case "member.claimed": .memberClaimed(try dec(MemberClaimed.self))
@@ -292,6 +333,8 @@ public enum EventCoding {
         case "member.device_invited": .memberDeviceInvited(try dec(MemberDeviceInvite.self))
         case "member.device_claimed": .memberDeviceClaimed(try dec(MemberDeviceClaimed.self))
         case "member.device_invite_revoked": .memberDeviceInviteRevoked(try dec(MemberDeviceInvite.self))
+        case "member.device_removed": .memberDeviceRemoved(try dec(MemberDeviceRemoved.self))
+        case "member.recovered": .memberRecovered(try dec(MemberRecovered.self))
         case "payment.created": .paymentCreated(try dec(Payment.self))
         case "payment.updated": .paymentUpdated(try dec(Payment.self))
         case "payment.deleted": .paymentDeleted(try dec(PaymentDeleted.self))

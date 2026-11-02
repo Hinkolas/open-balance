@@ -9,6 +9,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CreationCode struct {
+	ID        uuid.UUID
+	CodeHash  []byte
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	UsedAt    pgtype.Timestamptz
+	GroupID   pgtype.UUID
+}
+
 type Event struct {
 	GroupID    uuid.UUID
 	Seq        int64
@@ -35,4 +44,5 @@ type GroupKey struct {
 	UpdatedAt pgtype.Timestamptz
 	CreatedBy []byte
 	GrantRole *string
+	Seat      []byte
 }

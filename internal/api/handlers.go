@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -13,27 +16,41 @@ import (
 	"github.com/Hinkolas/open-balance/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ---- server owner ----
 
-func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
+// createGroup registers a group with its admin and recovery keys. codeHash is
+// the creation code used, nil for the server owner (§5.3, §5.4).
+func (s *Server) createGroup(w http.ResponseWriter, r *http.Request, codeHash []byte) {
 	var in struct {
-		GroupID  uuid.UUID `json:"groupId"`
-		AdminKey string    `json:"adminKey"`
+		GroupID     uuid.UUID `json:"groupId"`
+		AdminKey    string    `json:"adminKey"`
+		RecoveryKey string    `json:"recoveryKey"`
 	}
 	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err := decodeBody(caller{body: body}, &in); err != nil || in.GroupID == uuid.Nil {
-		writeErr(w, http.StatusBadRequest, "bad_request", "groupId and adminKey required")
+		writeErr(w, http.StatusBadRequest, "bad_request", "groupId, adminKey and recoveryKey required")
 		return
 	}
-	key, ok := decodeKey(in.AdminKey)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "bad_request", "adminKey must be a base64url Ed25519 public key")
+	admin, ok := decodeKey(in.AdminKey)
+	recovery, ok2 := decodeKey(in.RecoveryKey)
+	if !ok || !ok2 || bytes.Equal(admin, recovery) {
+		writeErr(w, http.StatusBadRequest, "bad_request", "adminKey and recoveryKey must be two different base64url Ed25519 public keys")
 		return
 	}
 	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		if codeHash != nil {
+			n, err := q.UseCreationCode(r.Context(), store.UseCreationCodeParams{CodeHash: codeHash, GroupID: pgtype.UUID{Bytes: in.GroupID, Valid: true}})
+			if err != nil {
+				return err
+			}
+			if n == 0 {
+				return errBadCode
+			}
+		}
 		n, err := q.CreateGroup(r.Context(), in.GroupID)
 		if err != nil {
 			return err
@@ -41,10 +58,17 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 		if n == 0 {
 			return errConflict
 		}
-		_, err = q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: key, Role: "admin", Status: "active"})
+		// The admin key is the admin's seat (§5.2); the recovery key belongs to it.
+		if _, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: admin, Role: "admin", Status: "active", Seat: admin}); err != nil {
+			return err
+		}
+		_, err = q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: in.GroupID, PublicKey: recovery, Role: "recovery", Status: "active", Seat: admin})
 		return err
 	})
-	if errors.Is(err, errConflict) {
+	if errors.Is(err, errBadCode) {
+		writeErr(w, http.StatusUnauthorized, "unauthorized", "creation code is unknown, used, withdrawn or expired")
+		return
+	} else if errors.Is(err, errConflict) {
 		writeErr(w, http.StatusConflict, "exists", "group already exists")
 		return
 	} else if err != nil {
@@ -52,6 +76,86 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"groupId": in.GroupID})
+}
+
+func (s *Server) createCreationCode(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ExpiresInHours *int `json:"expiresInHours"`
+	}
+	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := decodeBody(caller{body: body}, &in); err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+			return
+		}
+	}
+	hours := defaultCodeLifetimeHour
+	if in.ExpiresInHours != nil {
+		hours = *in.ExpiresInHours
+	}
+	if hours < 1 || hours > maxCodeLifetimeHours {
+		writeErr(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("expiresInHours must be 1 to %d", maxCodeLifetimeHours))
+		return
+	}
+	code := make([]byte, creationCodeBytes)
+	if _, err := rand.Read(code); err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	sum := sha256.Sum256(code)
+	id := uuid.Must(uuid.NewV7())
+	expires := s.now().Add(time.Duration(hours) * time.Hour).UTC().Truncate(time.Second)
+	if _, err := s.q.InsertCreationCode(r.Context(), store.InsertCreationCodeParams{ID: id, CodeHash: sum[:], ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true}}); err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "code": protocol.B64.EncodeToString(code), "expiresAt": expires})
+}
+
+func (s *Server) listCreationCodes(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.q.ListCreationCodes(r.Context())
+	if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	type code struct {
+		ID        uuid.UUID  `json:"id"`
+		CreatedAt time.Time  `json:"createdAt"`
+		ExpiresAt time.Time  `json:"expiresAt"`
+		UsedAt    *time.Time `json:"usedAt"`
+		GroupID   *uuid.UUID `json:"groupId"`
+	}
+	out := make([]code, 0, len(rows))
+	for _, c := range rows {
+		item := code{ID: c.ID, CreatedAt: c.CreatedAt.Time, ExpiresAt: c.ExpiresAt.Time}
+		if c.UsedAt.Valid {
+			item.UsedAt = &c.UsedAt.Time
+		}
+		if c.GroupID.Valid {
+			g := uuid.UUID(c.GroupID.Bytes)
+			item.GroupID = &g
+		}
+		out = append(out, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"codes": out})
+}
+
+func (s *Server) deleteCreationCode(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not_found", "unknown creation code")
+		return
+	}
+	n, err := s.q.DeleteCreationCode(r.Context(), id)
+	if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	if n == 0 {
+		writeErr(w, http.StatusNotFound, "not_found", "no unused creation code with this id")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) listGroups(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +230,13 @@ func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, c caller) 
 		writeErr(w, http.StatusBadRequest, "bad_request", "role must be member or admin")
 		return
 	}
-	n, err := s.q.InsertInvite(r.Context(), store.InsertInviteParams{GroupID: c.group, PublicKey: key, CreatedBy: c.key, GrantRole: &grant})
+	// Seats (§5.2): the admin inviting a member starts a new seat; every
+	// other invite is for a further device of the caller's own seat.
+	seat := c.seat
+	if c.role == "admin" && grant == "member" {
+		seat = key
+	}
+	n, err := s.q.InsertInvite(r.Context(), store.InsertInviteParams{GroupID: c.group, PublicKey: key, CreatedBy: c.key, GrantRole: &grant, Seat: seat})
 	if err != nil {
 		internalErr(w, r, err)
 		return
@@ -157,34 +267,23 @@ func (s *Server) revokeInvite(w http.ResponseWriter, r *http.Request, c caller) 
 }
 
 func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
-	var in struct {
-		MemberKey string `json:"memberKey"`
-		Proof     string `json:"proof"`
-	}
-	_ = decodeBody(c, &in)
-	key, ok := decodeKey(in.MemberKey)
-	proof, err := protocol.B64.DecodeString(in.Proof)
-	if !ok || err != nil {
-		writeErr(w, http.StatusBadRequest, "bad_request", "memberKey and proof required")
+	key, ok := s.claimedKey(w, c)
+	if !ok {
 		return
 	}
-	if !ed25519.Verify(key, protocol.ClaimInput(c.group, c.key), proof) {
-		writeErr(w, http.StatusBadRequest, "bad_proof", "proof does not verify with memberKey")
-		return
-	}
-	err = pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		grant, err := q.ClaimInvite(r.Context(), store.ClaimInviteParams{GroupID: c.group, PublicKey: c.key})
+		inv, err := q.ClaimInvite(r.Context(), store.ClaimInviteParams{GroupID: c.group, PublicKey: c.key})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errConflict
 		} else if err != nil {
 			return err
 		}
 		role := "member"
-		if grant != nil {
-			role = *grant
+		if inv.GrantRole != nil {
+			role = *inv.GrantRole
 		}
-		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: role, Status: "active"})
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: role, Status: "active", Seat: inv.Seat})
 		if err != nil {
 			return err
 		}
@@ -201,6 +300,126 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request, c caller) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+// ---- removing keys and recovery ----
+
+// removeKey removes a member or admin key and revokes the invites it created
+// (§5.3). The admin removes any, a member only keys of its own seat.
+func (s *Server) removeKey(w http.ResponseWriter, r *http.Request, c caller) {
+	key, ok := decodeKey(r.PathValue("key"))
+	if !ok {
+		writeErr(w, http.StatusNotFound, "not_found", "unknown key")
+		return
+	}
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		n, err := q.RemoveKey(r.Context(), store.RemoveKeyParams{GroupID: c.group, PublicKey: key, AnySeat: c.role == "admin", CallerSeat: c.seat})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return errNotFound
+		}
+		return q.RevokeInvitesCreatedBy(r.Context(), store.RevokeInvitesCreatedByParams{GroupID: c.group, Creator: key})
+	})
+	if errors.Is(err, errNotFound) {
+		writeErr(w, http.StatusNotFound, "not_found", "no active key with this value that you may remove")
+		return
+	} else if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// replaceRecovery swaps the group's recovery key (§5.4 step 9).
+func (s *Server) replaceRecovery(w http.ResponseWriter, r *http.Request, c caller) {
+	var in struct {
+		RecoveryKey string `json:"recoveryKey"`
+	}
+	_ = decodeBody(c, &in)
+	key, ok := decodeKey(in.RecoveryKey)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad_request", "recoveryKey must be a base64url Ed25519 public key")
+		return
+	}
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.RemoveRecoveryKeys(r.Context(), c.group); err != nil {
+			return err
+		}
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "recovery", Status: "active", Seat: c.seat})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return errConflict
+		}
+		return nil
+	})
+	if errors.Is(err, errConflict) {
+		writeErr(w, http.StatusConflict, "exists", "key already registered")
+		return
+	} else if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// recoverAdmin replaces every device of the admin's seat with memberKey (§5.4 step 8).
+func (s *Server) recoverAdmin(w http.ResponseWriter, r *http.Request, c caller) {
+	key, ok := s.claimedKey(w, c)
+	if !ok {
+		return
+	}
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.RevokeInvitesOfSeat(r.Context(), store.RevokeInvitesOfSeatParams{GroupID: c.group, Seat: c.seat}); err != nil {
+			return err
+		}
+		if err := q.RemoveSeat(r.Context(), store.RemoveSeatParams{GroupID: c.group, Seat: c.seat}); err != nil {
+			return err
+		}
+		n, err := q.InsertKey(r.Context(), store.InsertKeyParams{GroupID: c.group, PublicKey: key, Role: "admin", Status: "active", Seat: c.seat})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return errConflict
+		}
+		return nil
+	})
+	if errors.Is(err, errConflict) {
+		writeErr(w, http.StatusConflict, "conflict", "member key already registered")
+		return
+	} else if err != nil {
+		internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+// claimedKey reads `{memberKey, proof}` and checks that the proof is the
+// member key's signature over the caller's key (§5.3).
+func (s *Server) claimedKey(w http.ResponseWriter, c caller) ([]byte, bool) {
+	var in struct {
+		MemberKey string `json:"memberKey"`
+		Proof     string `json:"proof"`
+	}
+	_ = decodeBody(c, &in)
+	key, ok := decodeKey(in.MemberKey)
+	proof, err := protocol.B64.DecodeString(in.Proof)
+	if !ok || err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "memberKey and proof required")
+		return nil, false
+	}
+	if !ed25519.Verify(key, protocol.ClaimInput(c.group, c.key), proof) {
+		writeErr(w, http.StatusBadRequest, "bad_proof", "proof does not verify with memberKey")
+		return nil, false
+	}
+	return key, true
 }
 
 // ---- events ----
@@ -356,6 +575,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c caller) {
 var (
 	errConflict = errors.New("conflict")
 	errQuota    = errors.New("quota exceeded")
+	errNotFound = errors.New("not found")
+	errBadCode  = errors.New("bad creation code")
 )
 
 func decodeKey(s string) ([]byte, bool) {

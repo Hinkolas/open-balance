@@ -8,6 +8,9 @@ public enum FlowError: Error, LocalizedError, Equatable {
     case seatMissing
     case seatTaken
     case unsupportedServer
+    case creationCodeUsed
+    case recoveryReplaced
+    case notRecoverable
 
     public var errorDescription: String? {
         switch self {
@@ -16,31 +19,85 @@ public enum FlowError: Error, LocalizedError, Equatable {
         case .seatMissing: String(localized: "This invite doesn't match a member of the group.")
         case .seatTaken: String(localized: "Someone already joined as this member.")
         case .unsupportedServer: String(localized: "This server doesn't speak protocol version 1.")
+        case .creationCodeUsed: String(localized: "This link to create a group has been used, withdrawn or has expired. Ask the server owner for a new one.")
+        case .recoveryReplaced: String(localized: "This recovery kit no longer works. A newer one replaced it, or the group was deleted.")
+        case .notRecoverable: String(localized: "This recovery kit doesn't match the group's admin.")
         }
     }
 }
 
-/// Create, invite, add devices and join (PROTOCOL.md §5.4).
+/// Create, invite, add and remove devices, join and recover (PROTOCOL.md §5.4).
 @MainActor
 public extension GroupSession {
-    /// Create a group on a server this device owns, as its admin.
+    /// Create a group as its admin. `token` is the server's ADMIN_TOKEN or a
+    /// creation code from the server owner. Returns the recovery kit, which
+    /// this device doesn't keep: show it once.
     static func create(
-        server: URL, ownerToken: String, name: String, currency: String, myName: String,
+        server: URL, token: String, name: String, currency: String, myName: String,
         store: CredentialStore = KeychainCredentialStore(), cacheRoot: URL? = nil
-    ) async throws -> GroupSession {
+    ) async throws -> (GroupSession, RecoveryLink) {
         let client = ServerClient(base: server)
         guard try await client.info().protocols.contains(1) else { throw FlowError.unsupportedServer }
         let groupID = UUID.v7()
         let key = Curve25519.Signing.PrivateKey()
-        try await client.createGroup(ownerToken: ownerToken, groupID: groupID, adminKey: key.publicKey.rawRepresentation)
+        let recoverySeed = Data.random(32)
+        let recovery = try Curve25519.Signing.PrivateKey(rawRepresentation: recoverySeed)
+        do {
+            try await client.createGroup(token: token, groupID: groupID, adminKey: key.publicKey.rawRepresentation,
+                                         recoveryKey: recovery.publicKey.rawRepresentation)
+        } catch let e as ServerError where e.status == 401 {
+            throw FlowError.creationCodeUsed
+        }
         let creds = GroupCredentials(server: server, groupID: groupID, secret: .random(32), memberID: UUID.v7().lower,
                                      memberSeed: key.rawRepresentation, registered: true)
         try store.save(creds)
         let session = try GroupSession(credentials: creds, store: store, cacheRoot: cacheRoot)
         try session.submit(.groupCreated(.init(name: name, currency: currency,
-                                               admin: .init(id: creds.memberID, name: myName, key: key.publicKey.rawRepresentation.base64URL))))
+                                               admin: .init(id: creds.memberID, name: myName, key: key.publicKey.rawRepresentation.base64URL),
+                                               recoveryKey: recovery.publicKey.rawRepresentation.base64URL)))
         try await session.syncNow()
-        return session
+        return (session, RecoveryLink(server: server, groupID: groupID, adminID: creds.memberID, secret: creds.secret, recoverySeed: recoverySeed))
+    }
+
+    /// Replace the recovery kit: the old one stops working. Returns the new
+    /// one, which this device doesn't keep.
+    func newRecoveryKit() async throws -> RecoveryLink {
+        guard isAdmin else { throw FlowError.notAdmin }
+        let seed = Data.random(32)
+        let recovery = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
+        try await client.replaceRecovery(signer: credentials.signer, groupID: id, recoveryKey: recovery.publicKey.rawRepresentation)
+        try submit(.groupRecoveryChanged(.init(recoveryKey: recovery.publicKey.rawRepresentation.base64URL)))
+        try await syncNow()
+        return RecoveryLink(server: credentials.server, groupID: id, adminID: me, secret: credentials.secret, recoverySeed: seed)
+    }
+
+    /// Remove a device of a member: one of my own other devices, or (admin)
+    /// any member's. The ledger first, then the server cuts the key off.
+    func removeDevice(of member: MemberID, key: Data) async throws {
+        guard member == me || isAdmin else { throw FlowError.notAdmin }
+        if state.members[member]?.keys.contains(key) == true {
+            try submit(.memberDeviceRemoved(.init(id: member, key: key.base64URL)))
+            try await syncNow()
+        }
+        do {
+            try await client.removeKey(signer: credentials.signer, groupID: id, key: key)
+        } catch let e as ServerError where e.status == 404 {}
+    }
+
+    /// Reset a member who lost every device (admin): remove all its devices
+    /// and return a new invite for its new first device. The member keeps
+    /// its payments and balance.
+    func resetMember(_ member: MemberID) async throws -> InviteLink {
+        guard isAdmin, member != me else { throw FlowError.notAdmin }
+        let keys = state.members[member]?.keys ?? []
+        for key in keys { try submit(.memberDeviceRemoved(.init(id: member, key: key.base64URL))) }
+        if !keys.isEmpty { try await syncNow() }
+        for key in keys {
+            do {
+                try await client.removeKey(signer: credentials.signer, groupID: id, key: key)
+            } catch let e as ServerError where e.status == 404 {}
+        }
+        return try await renewInvite(for: member)
     }
 
     /// Add a member seat and return the invite to show as QR. The seat is on
@@ -167,6 +224,46 @@ public extension GroupSession {
             throw FlowError.seatTaken
         }
         try await session.syncNow()
+        return session
+    }
+
+    /// Take over the admin's seat with the recovery kit: the server swaps all
+    /// of the admin's devices for this one, then the ledger records it. Safe
+    /// to retry with the same kit and `existing` credentials.
+    static func recover(
+        _ link: RecoveryLink, existing: GroupCredentials? = nil,
+        store: CredentialStore = KeychainCredentialStore(), cacheRoot: URL? = nil
+    ) async throws -> GroupSession {
+        let client = ServerClient(base: link.server)
+        let recovery = try Curve25519.Signing.PrivateKey(rawRepresentation: link.recoverySeed)
+        var creds = existing ?? GroupCredentials(server: link.server, groupID: link.groupID, secret: link.secret, memberID: link.adminID,
+                                                 memberSeed: Curve25519.Signing.PrivateKey().rawRepresentation, registered: false)
+        if !creds.registered {
+            try store.save(creds)
+            let member = try creds.signer
+            do {
+                try await client.recover(recovery: recovery, member: member, groupID: link.groupID)
+            } catch let e as ServerError where e.status == 403 || e.status == 409 {
+                // Registered by an earlier attempt, or the kit was replaced.
+                do {
+                    _ = try await client.read(signer: member, groupID: link.groupID, after: 0, limit: 1)
+                } catch {
+                    store.delete(link.groupID)
+                    throw e.status == 403 ? FlowError.recoveryReplaced : error
+                }
+            }
+            creds.registered = true
+            try store.save(creds)
+        }
+        let session = try GroupSession(credentials: creds, store: store, cacheRoot: cacheRoot)
+        try await session.syncNow()
+        guard session.state.adminID == link.adminID else { throw FlowError.notRecoverable }
+        let memberKey = try creds.signer.publicKey.rawRepresentation
+        if session.state.members[link.adminID]?.keys.contains(memberKey) != true {
+            let sig = try recovery.signature(for: LedgerCrypto.recoverInput(groupID: link.groupID, key: memberKey))
+            try session.submit(.memberRecovered(.init(id: link.adminID, key: memberKey.base64URL, recoverySig: sig.base64URL)))
+            try await session.syncNow()
+        }
         return session
     }
 }

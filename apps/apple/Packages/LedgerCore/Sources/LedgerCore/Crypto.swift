@@ -13,6 +13,7 @@ public enum LedgerCrypto {
     private static let labelChain = "open-balance/v1/chain"
     private static let labelReq = "open-balance/v1/req\n"
     private static let labelClaim = "open-balance/v1/claim"
+    private static let labelRecover = "open-balance/v1/recover"
 
     public enum Failure: Error { case badSecret, notABlob, badPlaintext }
 
@@ -94,6 +95,11 @@ public enum LedgerCrypto {
     /// proof), invite key over the member key (ledger inviteSig).
     public static func claimInput(groupID: UUID, key: Data) -> Data {
         Data(labelClaim.utf8) + groupID.bytes + key
+    }
+
+    /// Signed by the recovery key for the admin's new device key (§3.4).
+    public static func recoverInput(groupID: UUID, key: Data) -> Data {
+        Data(labelRecover.utf8) + groupID.bytes + key
     }
 
     public static func requestSigningInput(method: String, pathAndQuery: String, ts: Int64, body: Data) -> Data {

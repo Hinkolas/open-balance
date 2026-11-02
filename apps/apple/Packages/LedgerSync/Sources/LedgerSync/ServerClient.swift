@@ -29,9 +29,35 @@ public struct ServerClient: Sendable {
         try await send("GET", "/v1/info", auth: .none)
     }
 
-    public func createGroup(ownerToken: String, groupID: UUID, adminKey: Data) async throws {
-        let _: Empty = try await send("POST", "/v1/groups", auth: .owner(ownerToken),
-                                      body: ["groupId": groupID.lower, "adminKey": adminKey.base64URL])
+    /// `token` is the server's ADMIN_TOKEN or a creation code (PROTOCOL.md §5.3).
+    public func createGroup(token: String, groupID: UUID, adminKey: Data, recoveryKey: Data) async throws {
+        let _: Empty = try await send("POST", "/v1/groups", auth: .owner(token),
+                                      body: ["groupId": groupID.lower, "adminKey": adminKey.base64URL, "recoveryKey": recoveryKey.base64URL])
+    }
+
+    /// A one-time code that lets someone else create a group (server owner only).
+    public func createCreationCode(ownerToken: String, expiresInHours: Int = 168) async throws -> (code: String, expiresAt: Date) {
+        struct Out: Decodable { var code: String; var expiresAt: String }
+        let out: Out = try await send("POST", "/v1/admin/creation-codes", auth: .owner(ownerToken), body: ["expiresInHours": expiresInHours])
+        return (out.code, ISO8601DateFormatter().date(from: out.expiresAt) ?? .now.addingTimeInterval(Double(expiresInHours) * 3600))
+    }
+
+    /// Remove a member or admin key from the group (§5.3).
+    public func removeKey(signer: Curve25519.Signing.PrivateKey, groupID: UUID, key: Data) async throws {
+        let _: Empty = try await send("DELETE", "/v1/groups/\(groupID.lower)/keys/\(key.base64URL)", auth: .key(signer))
+    }
+
+    /// Replace the group's recovery key (admin only).
+    public func replaceRecovery(signer: Curve25519.Signing.PrivateKey, groupID: UUID, recoveryKey: Data) async throws {
+        let _: Empty = try await send("PUT", "/v1/groups/\(groupID.lower)/recovery", auth: .key(signer),
+                                      body: ["recoveryKey": recoveryKey.base64URL])
+    }
+
+    /// Register `member` as the admin's only device, signed with the recovery key.
+    public func recover(recovery: Curve25519.Signing.PrivateKey, member: Curve25519.Signing.PrivateKey, groupID: UUID) async throws {
+        let proof = try member.signature(for: LedgerCrypto.claimInput(groupID: groupID, key: recovery.publicKey.rawRepresentation))
+        let _: Empty = try await send("POST", "/v1/groups/\(groupID.lower)/recover", auth: .key(recovery),
+                                      body: ["memberKey": member.publicKey.rawRepresentation.base64URL, "proof": proof.base64URL])
     }
 
     /// `role` is what the claimed key gets on the server: `member`, or `admin`

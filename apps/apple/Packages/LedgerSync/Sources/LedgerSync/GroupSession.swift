@@ -17,7 +17,11 @@ public final class GroupSession: Identifiable {
     public private(set) var isSyncing = false
     public private(set) var lastError: String?
     public private(set) var isLive = false
+    /// The server refused this device's key: it was removed, or the group is gone.
+    public private(set) var accessLost = false
     public var pendingCount: Int { outbox.count }
+    /// This device's public member key.
+    public nonisolated let deviceKey: Data
 
     public nonisolated var id: UUID { groupID }
     nonisolated let groupID: UUID
@@ -38,6 +42,7 @@ public final class GroupSession: Identifiable {
         self.store = store
         self.cache = GroupCache(groupID: credentials.groupID, root: cacheRoot)
         self.client = ServerClient(base: credentials.server)
+        self.deviceKey = try credentials.signer.publicKey.rawRepresentation
         self.confirmed = cache.loadEvents()
         self.outbox = cache.loadOutbox()
         var ledger = try Ledger(groupID: credentials.groupID, secret: credentials.secret)
@@ -48,7 +53,10 @@ public final class GroupSession: Identifiable {
     }
 
     public var me: MemberID { credentials.memberID }
-    public var isAdmin: Bool { state.adminID == me }
+    public var isAdmin: Bool { state.adminID == me && !isRemoved }
+    /// This device no longer belongs to the group: removed in the ledger, or
+    /// refused by the server. It can only forget the group.
+    public var isRemoved: Bool { accessLost || state.removedKeys.contains(deviceKey) }
 
     // MARK: - Writing
 
@@ -87,8 +95,21 @@ public final class GroupSession: Identifiable {
     /// Sync and wait for it, throwing the first error.
     public func syncNow() async throws {
         try await serialized {
-            try await self.push()
-            try await self.pull()
+            try await self.noteAccess {
+                try await self.push()
+                try await self.pull()
+            }
+        }
+    }
+
+    /// A 403 for a registered key means the server cut this device off.
+    private func noteAccess(_ op: () async throws -> Void) async throws {
+        do {
+            try await op()
+        } catch let e as ServerError where e.status == 403 && credentials.registered {
+            accessLost = true
+            stopLive()
+            throw e
         }
     }
 
@@ -107,8 +128,12 @@ public final class GroupSession: Identifiable {
         isSyncing = true
         defer { isSyncing = false }
         do {
-            try await push()
-            try await pull()
+            try await noteAccess {
+                try await push()
+                try await pull()
+            }
+            lastError = nil
+        } catch let e as ServerError where accessLost && e.status == 403 {
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -163,7 +188,7 @@ public final class GroupSession: Identifiable {
 
     /// Keep a stream open while the app is in the foreground; pull on every new head.
     public func startLive() {
-        guard liveTask == nil else { return }
+        guard liveTask == nil, !isRemoved else { return }
         liveTask = Task { [weak self] in
             var delay: Duration = .seconds(1)
             while !Task.isCancelled {

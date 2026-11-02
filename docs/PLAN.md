@@ -19,16 +19,18 @@ of ciphertext and never sees names or amounts.
 |---|---|---|
 | Data | Append-only encrypted event ledger per group; clients replay it into state | Server never sees content; history is reproducible from the ledger |
 | Server | Go, net/http, sqlc + pgx/v5, Postgres 17, headless JSON API, hosted on skali | |
-| Hosting model | Bring your own server. Only the server owner (`ADMIN_TOKEN`) creates groups | |
+| Hosting model | Bring your own server. The server owner (`ADMIN_TOKEN`) approves groups: creates them directly or hands out one-time creation codes. The token gives no access to any group (2026-11-02) | Running a server doesn't make you able to read the groups on it |
 | Crypto | HKDF-SHA256, ChaCha20-Poly1305, Ed25519, SHA-256. CryptoKit on iOS, BouncyCastle (lightweight API) on Android, stdlib + x/crypto in Go | Available on every target platform; BouncyCastle behaves the same on every Android version |
 | Identity | One Ed25519 key per device of a member per group; a member (a person or a company) may have several, all equal. Signs events (clients verify) and requests (server verifies). No accounts | A member is identified by its keys; tracking is per member, not per person |
 | Joining | Per-member invite: admin adds and names the member, shows that member's QR (server, group id, member id, group secret, one-time invite key) for its first device. Further devices: any device of the member shows a one-time device QR for its own member (2026-11-01) | One invite, one key; the admin can't add devices to a member that already joined, so nobody else can speak for it |
+| Recovery | Members who lost every device: the admin resets them (new invite, same member). The admin: a per-group recovery link, shown once, kept in a password manager (2026-11-02) | Without it a lost admin phone would freeze the group |
+| Removal | Devices are removed by another device of the member or by the admin; the server refuses removed keys. `K_enc` is not rotated yet (key epochs on the roadmap) (2026-11-02) | |
 | Permissions | Server: who may read and write (key registry, roles). Clients: content rules, enforced identically, invalid events stay visible | The server can't see content |
 | Content rules | Any member records payments for anyone. Only the receiver (any member for unclaimed seats) or the admin records an arrival. Only the creator or the admin edits or deletes a payment | |
 | Payments | One event type with in split, out split, `track` flag. Income, Expense and Settle up are forms over it | One math rule on every platform; new forms need no protocol change |
 | Balances | Net per member, debt simplification (greedy, deterministic) | |
 | Money | Integer minor units, one currency per group, set at creation | |
-| Key storage | iOS: iCloud Keychain (end-to-end encrypted by Apple, synced across the person's devices). Android: files sealed with an Android Keystore AES-GCM key, not backed up (2026-11-02) | iOS survives losing a phone; on Android a lost phone needs a device invite from another device of the member |
+| Key storage | Device only, never synced or backed up. iOS: Keychain, after first unlock, this device only. Android: files sealed with an Android Keystore AES-GCM key, not backed up (2026-11-02) | A lost device is lost: another device of the member or the admin removes it, and a new device joins with a device invite |
 | Clients | Native per platform, rewritten against `spec/vectors`. iOS: SwiftUI, iOS 26+, Swift 6. Android: Jetpack Compose, Material 3, Kotlin, Android 11+ (2026-11-02). Windows later | |
 | Language | German and English (String Catalogs), informal "du" in German | |
 | Design | Quitt's visual language (`docs/DESIGN.md`) | |
@@ -63,9 +65,11 @@ docs/
 
 ```sql
 groups      (id uuid pk, head_seq bigint, bytes_used bigint, created_at, last_write_at)
-group_keys  (group_id, public_key bytea, role admin|member|invite,
-             status active|pending|claimed|revoked, created_by bytea, grant_role,
-             created_at, updated_at, pk (group_id, public_key))
+group_keys  (group_id, public_key bytea, role admin|member|recovery|invite,
+             status active|pending|claimed|revoked|removed, created_by bytea,
+             grant_role, seat bytea, created_at, updated_at, pk (group_id, public_key))
+creation_codes (id uuid pk, code_hash bytea unique, created_at, expires_at,
+             used_at, group_id)
 events      (group_id, seq bigint, id uuid, blob bytea, author_key bytea, received_at,
              pk (group_id, seq), unique (group_id, id))
 ```
@@ -85,10 +89,16 @@ servers), and a separate **+**.
   writes the same payment event; an "Advanced" toggle shows both splits.
 - **Payment detail**: lines, arrivals ("record arrival", instalments),
   edit, delete, edit history.
-- **Members** (admin): add member → name → QR. Renew a lost invite.
-- **Devices** (everyone, own member): add a device → one-time QR, revocable.
-- **Join**: camera scanner or paste a link → claim → "Welcome, Anna".
-- **Servers**: add a server as owner (URL + admin token) to create groups.
+- **Members** (admin): add member → name → QR. Renew a lost invite. Reset a
+  member who lost every device (removes its devices, new QR).
+- **Devices** (everyone, own member): add a device → one-time QR, revocable;
+  remove a lost device.
+- **Join**: camera scanner or paste a link → claim → "Welcome, Anna". The
+  same sheet takes a recovery link (the admin's recovery kit).
+- **Recovery kit** (admin): shown once after creating a group, replaceable
+  from the group settings.
+- **Servers**: add a server as owner (URL + admin token) to create groups and
+  to hand out one-time creation links.
 - Offline-first: writes go to an outbox with client ids and apply
   optimistically; the ledger cache is local (SQLite via GRDB); state is
   rebuilt in memory.
@@ -142,15 +152,13 @@ full-screen task screens instead of sheets, bottom sheets for small tasks.
 
 ## Roadmap
 
-- Remove members: `member.removed`, server key status `removed`, key epochs
-  (`K_enc` rotation).
-- Several admins; let the server owner hand out one-time group creation codes.
+- Remove members entirely: `member.removed`; key epochs (`K_enc` rotation
+  after a device is removed).
+- Several admins.
 - Encrypted snapshots for long ledgers; encrypted attachments (receipt photos)
   in a bucket.
 - Push notifications ("group changed", no content) via APNs.
 - Windows (and macOS via the Apple target).
-- Android: synced key backup (Google Block Store, end-to-end encrypted)
-  so a lost phone doesn't need a device invite.
 - Payment handoff from Quitt: IBAN / PayPal.me inside the encrypted ledger,
   EPC QR on Settle up.
 

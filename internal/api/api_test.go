@@ -106,11 +106,11 @@ func TestGroupLifecycle(t *testing.T) {
 	}
 
 	// Only the server owner creates groups.
-	st, _ := c.do("POST", "/v1/groups", nil, false, map[string]any{"groupId": group, "adminKey": pubB64(admin)})
+	st, _ := c.do("POST", "/v1/groups", nil, false, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
 	expect("create without owner token", st, 401)
-	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin)})
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
 	expect("create", st, 201)
-	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin)})
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
 	expect("create twice", st, 409)
 
 	// Admin appends; strangers can't read.
@@ -219,7 +219,7 @@ func TestDeviceInvites(t *testing.T) {
 		expect(what, st, 200)
 	}
 
-	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin)})
+	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())})
 	expect("create", st, 201)
 	inv, st := invite(admin, "")
 	expect("admin invites", st, 201)
@@ -257,7 +257,7 @@ func TestStreamWakesOnAppend(t *testing.T) {
 	c := client{t, srv}
 	group := uuid.Must(uuid.NewV7())
 	admin := newKey()
-	if st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin)}); st != 201 {
+	if st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": group, "adminKey": pubB64(admin), "recoveryKey": pubB64(newKey())}); st != 201 {
 		t.Fatalf("create: %d", st)
 	}
 	path := "/v1/groups/" + group.String() + "/stream"
@@ -299,4 +299,209 @@ func TestStreamWakesOnAppend(t *testing.T) {
 	wait(`"seq": 0`)
 	c.do("POST", "/v1/groups/"+group.String()+"/events", admin, false, map[string]any{"events": []any{map[string]any{"id": uuid.Must(uuid.NewV7()), "blob": blob(1)}}})
 	wait(`"seq": 1`)
+}
+
+func expectStatus(t *testing.T, what string, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s: status %d, want %d", what, got, want)
+	}
+}
+
+// groupFixture creates a group and helpers to invite, claim and remove keys.
+type groupFixture struct {
+	c        client
+	group    uuid.UUID
+	g        string
+	admin    ed25519.PrivateKey
+	recovery ed25519.PrivateKey
+}
+
+func newGroup(t *testing.T, c client) groupFixture {
+	t.Helper()
+	f := groupFixture{c: c, group: uuid.Must(uuid.NewV7()), admin: newKey(), recovery: newKey()}
+	f.g = "/v1/groups/" + f.group.String()
+	st, _ := c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": f.group, "adminKey": pubB64(f.admin), "recoveryKey": pubB64(f.recovery)})
+	expectStatus(t, "create", st, 201)
+	return f
+}
+
+func (f groupFixture) invite(by ed25519.PrivateKey, role string) ed25519.PrivateKey {
+	f.c.t.Helper()
+	k := newKey()
+	body := map[string]any{"inviteKey": pubB64(k)}
+	if role != "" {
+		body["role"] = role
+	}
+	st, _ := f.c.do("POST", f.g+"/invites", by, false, body)
+	expectStatus(f.c.t, "invite", st, 201)
+	return k
+}
+
+func (f groupFixture) claim(inv ed25519.PrivateKey) ed25519.PrivateKey {
+	f.c.t.Helper()
+	dev := newKey()
+	proof := ed25519.Sign(dev, protocol.ClaimInput(f.group, inv.Public().(ed25519.PublicKey)))
+	st, _ := f.c.do("POST", f.g+"/claim", inv, false, map[string]any{"memberKey": pubB64(dev), "proof": protocol.B64.EncodeToString(proof)})
+	expectStatus(f.c.t, "claim", st, 200)
+	return dev
+}
+
+func (f groupFixture) remove(by, key ed25519.PrivateKey) int {
+	f.c.t.Helper()
+	st, _ := f.c.do("DELETE", f.g+"/keys/"+pubB64(key), by, false, nil)
+	return st
+}
+
+func (f groupFixture) reads(by ed25519.PrivateKey) int {
+	f.c.t.Helper()
+	st, _ := f.c.do("GET", f.g+"/events?after=0", by, false, nil)
+	return st
+}
+
+// Creating a group needs the owner token or an unused, unexpired creation code (§5.3).
+func TestCreationCodes(t *testing.T) {
+	c := client{t, testServer(t)}
+	create := func(auth string) int {
+		t.Helper()
+		raw, _ := json.Marshal(map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": pubB64(newKey()), "recoveryKey": pubB64(newKey())})
+		req, _ := http.NewRequest("POST", c.srv.URL+"/v1/groups", bytes.NewReader(raw))
+		if auth != "" {
+			req.Header.Set("Authorization", "Bearer "+auth)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+
+	st, _ := c.do("POST", "/v1/admin/creation-codes", nil, false, nil)
+	expectStatus(t, "code without owner token", st, 401)
+	st, _ = c.do("POST", "/v1/admin/creation-codes", nil, true, map[string]any{"expiresInHours": 0})
+	expectStatus(t, "code with zero lifetime", st, 400)
+	st, out := c.do("POST", "/v1/admin/creation-codes", nil, true, nil)
+	expectStatus(t, "code", st, 201)
+	code, id := out["code"].(string), out["id"].(string)
+
+	expectStatus(t, "create with a made-up code", create(protocol.B64.EncodeToString(make([]byte, 32))), 401)
+	expectStatus(t, "create with code", create(code), 201)
+	expectStatus(t, "create with a used code", create(code), 401)
+	st, _ = c.do("DELETE", "/v1/admin/creation-codes/"+id, nil, true, nil)
+	expectStatus(t, "withdraw a used code", st, 404)
+
+	_, out = c.do("POST", "/v1/admin/creation-codes", nil, true, map[string]any{"expiresInHours": 1})
+	st, _ = c.do("DELETE", "/v1/admin/creation-codes/"+out["id"].(string), nil, true, nil)
+	expectStatus(t, "withdraw", st, 204)
+	expectStatus(t, "create with a withdrawn code", create(out["code"].(string)), 401)
+
+	st, out = c.do("GET", "/v1/admin/creation-codes", nil, true, nil)
+	expectStatus(t, "list", st, 200)
+	found := false
+	for _, item := range out["codes"].([]any) {
+		m := item.(map[string]any)
+		if _, leaks := m["code"]; leaks {
+			t.Fatal("list returns codes")
+		}
+		if m["id"] == id && m["usedAt"] != nil && m["groupId"] != nil {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("used code not listed with its group")
+	}
+
+	// The same key can't be admin and recovery key.
+	k := pubB64(newKey())
+	st, _ = c.do("POST", "/v1/groups", nil, true, map[string]any{"groupId": uuid.Must(uuid.NewV7()), "adminKey": k, "recoveryKey": k})
+	expectStatus(t, "admin key as recovery key", st, 400)
+}
+
+// Members remove keys of their own seat, the admin any key (§5.2, §5.4 steps 6, 7).
+func TestRemoveKeys(t *testing.T) {
+	f := newGroup(t, client{t, testServer(t)})
+	anna := f.claim(f.invite(f.admin, ""))
+	annaPhone := f.claim(f.invite(anna, ""))
+	annaPending := f.invite(annaPhone, "")
+	ben := f.claim(f.invite(f.admin, ""))
+	adminPhone := f.claim(f.invite(f.admin, "admin"))
+
+	expectStatus(t, "member removes another member's key", f.remove(ben, anna), 404)
+	expectStatus(t, "member removes the admin's key", f.remove(ben, adminPhone), 404)
+	expectStatus(t, "admin removes the recovery key", f.remove(f.admin, f.recovery), 404)
+
+	// Anna removes her lost device: it is cut off, the invites it made die with it.
+	expectStatus(t, "member removes its own device", f.remove(anna, annaPhone), 204)
+	expectStatus(t, "removed device reads", f.reads(annaPhone), 403)
+	expectStatus(t, "remove twice", f.remove(anna, annaPhone), 404)
+	st, _ := f.c.do("DELETE", f.g+"/invites/"+pubB64(annaPending), f.admin, false, nil)
+	expectStatus(t, "pending invite of a removed device", st, 404)
+
+	// The admin resets Ben: removes his key and invites a new first device.
+	pending := f.invite(ben, "")
+	expectStatus(t, "admin removes a member's key", f.remove(f.admin, ben), 204)
+	dev := newKey()
+	proof := ed25519.Sign(dev, protocol.ClaimInput(f.group, pending.Public().(ed25519.PublicKey)))
+	st, _ = f.c.do("POST", f.g+"/claim", pending, false, map[string]any{"memberKey": pubB64(dev), "proof": protocol.B64.EncodeToString(proof)})
+	expectStatus(t, "claim an invite of a removed key", st, 403)
+	benNew := f.claim(f.invite(f.admin, ""))
+	expectStatus(t, "Ben's new device reads", f.reads(benNew), 200)
+	expectStatus(t, "Ben's new device removes Anna", f.remove(benNew, anna), 404)
+
+	// The admin's devices share a seat.
+	expectStatus(t, "admin device removes another admin device", f.remove(adminPhone, f.admin), 204)
+	expectStatus(t, "removed admin device reads", f.reads(f.admin), 403)
+	expectStatus(t, "remaining admin device reads", f.reads(adminPhone), 200)
+}
+
+// The recovery key replaces every admin device (§5.4 steps 8, 9).
+func TestRecovery(t *testing.T) {
+	f := newGroup(t, client{t, testServer(t)})
+	adminPhone := f.claim(f.invite(f.admin, "admin"))
+	pendingMember := f.invite(f.admin, "")
+	anna := f.claim(f.invite(f.admin, ""))
+
+	recoverWith := func(rk ed25519.PrivateKey) (ed25519.PrivateKey, int) {
+		t.Helper()
+		dev := newKey()
+		proof := ed25519.Sign(dev, protocol.ClaimInput(f.group, rk.Public().(ed25519.PublicKey)))
+		st, _ := f.c.do("POST", f.g+"/recover", rk, false, map[string]any{"memberKey": pubB64(dev), "proof": protocol.B64.EncodeToString(proof)})
+		return dev, st
+	}
+
+	expectStatus(t, "recovery key reads", f.reads(f.recovery), 403)
+	_, st := recoverWith(anna)
+	expectStatus(t, "member recovers", st, 403)
+	dev := newKey()
+	st, _ = f.c.do("POST", f.g+"/recover", f.recovery, false, map[string]any{"memberKey": pubB64(dev), "proof": "AAAA"})
+	expectStatus(t, "recover with a bad proof", st, 400)
+
+	restored, st := recoverWith(f.recovery)
+	expectStatus(t, "recover", st, 200)
+	expectStatus(t, "old admin device reads", f.reads(f.admin), 403)
+	expectStatus(t, "other old admin device reads", f.reads(adminPhone), 403)
+	expectStatus(t, "restored device reads", f.reads(restored), 200)
+	expectStatus(t, "member still reads", f.reads(anna), 200)
+	st, _ = f.c.do("DELETE", f.g+"/invites/"+pubB64(pendingMember), restored, false, nil)
+	expectStatus(t, "old admin's pending invite was revoked", st, 404)
+	expectStatus(t, "restored device is admin", f.remove(restored, anna), 204)
+
+	// Only the admin replaces the recovery key; the old one stops working.
+	next := newKey()
+	st, _ = f.c.do("PUT", f.g+"/recovery", anna, false, map[string]any{"recoveryKey": pubB64(next)})
+	expectStatus(t, "removed member replaces recovery key", st, 403)
+	member := f.claim(f.invite(restored, ""))
+	st, _ = f.c.do("PUT", f.g+"/recovery", member, false, map[string]any{"recoveryKey": pubB64(next)})
+	expectStatus(t, "member replaces recovery key", st, 403)
+	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next)})
+	expectStatus(t, "admin replaces recovery key", st, 204)
+	st, _ = f.c.do("PUT", f.g+"/recovery", restored, false, map[string]any{"recoveryKey": pubB64(next)})
+	expectStatus(t, "reuse a key", st, 409)
+	_, st = recoverWith(f.recovery)
+	expectStatus(t, "recover with the old key", st, 403)
+	again, st := recoverWith(next)
+	expectStatus(t, "recover with the new key", st, 200)
+	expectStatus(t, "previous restored device reads", f.reads(restored), 403)
+	expectStatus(t, "second restored device reads", f.reads(again), 200)
 }

@@ -29,12 +29,13 @@ const (
 	// MaxClockSkew is how far a request timestamp may be from the server clock (§5.1).
 	MaxClockSkewSeconds = 300
 
-	labelEnc   = "open-balance/v1/enc"
-	labelEvent = "open-balance/v1/event"
-	labelSig   = "open-balance/v1/sig"
-	labelChain = "open-balance/v1/chain"
-	labelReq   = "open-balance/v1/req\n"
-	labelClaim = "open-balance/v1/claim"
+	labelEnc     = "open-balance/v1/enc"
+	labelEvent   = "open-balance/v1/event"
+	labelSig     = "open-balance/v1/sig"
+	labelChain   = "open-balance/v1/chain"
+	labelReq     = "open-balance/v1/req\n"
+	labelClaim   = "open-balance/v1/claim"
+	labelRecover = "open-balance/v1/recover"
 )
 
 // B64 is base64url without padding, the encoding for keys, blobs and signatures.
@@ -147,6 +148,15 @@ func ChainNext(prev [32]byte, seq uint64, eventID uuid.UUID, blob []byte) [32]by
 func ClaimInput(groupID uuid.UUID, key []byte) []byte {
 	m := make([]byte, 0, len(labelClaim)+16+len(key))
 	m = append(m, labelClaim...)
+	m = append(m, groupID[:]...)
+	return append(m, key...)
+}
+
+// RecoverInput is what the recovery key signs to vouch for the admin's new
+// device key (§3.4, §7.3 member.recovered).
+func RecoverInput(groupID uuid.UUID, key []byte) []byte {
+	m := make([]byte, 0, len(labelRecover)+16+len(key))
+	m = append(m, labelRecover...)
 	m = append(m, groupID[:]...)
 	return append(m, key...)
 }

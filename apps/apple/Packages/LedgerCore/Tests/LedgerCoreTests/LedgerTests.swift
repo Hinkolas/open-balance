@@ -26,11 +26,13 @@ struct Fixture {
     var server = FakeServer()
     var ledger: Ledger
     let admin: Actor
+    let recovery = Curve25519.Signing.PrivateKey()
 
     init() throws {
         ledger = try Ledger(groupID: group, secret: secret)
         admin = try Actor(group, secret)
-        try write(admin, .groupCreated(.init(name: "Italien", currency: "EUR", admin: .init(id: admin.id, name: "Jonas", key: admin.key.publicKey.rawRepresentation.base64URL))))
+        try write(admin, .groupCreated(.init(name: "Italien", currency: "EUR", admin: .init(id: admin.id, name: "Jonas", key: admin.key.publicKey.rawRepresentation.base64URL),
+                                             recoveryKey: recovery.publicKey.rawRepresentation.base64URL)))
     }
 
     /// Write as `who`, append, reduce; returns the rejection of that event.
@@ -238,4 +240,111 @@ struct Fixture {
     var fresh = try Ledger(groupID: f.group, secret: f.secret)
     fresh.apply(f.server.events)
     #expect(fresh.state == f.ledger.state)
+}
+
+private func pub(_ k: Curve25519.Signing.PrivateKey) -> Data { k.publicKey.rawRepresentation }
+
+/// Removing devices and resetting a member (§7.3 member.device_removed).
+@Test func deviceRemoval() throws {
+    var f = try Fixture()
+    let anna = try f.join("Anna")
+    let ben = try f.join("Ben")
+    let invite = Curve25519.Signing.PrivateKey()
+    #expect(try f.write(anna, .memberDeviceInvited(.init(id: anna.id, inviteKey: pub(invite).base64URL))) == nil)
+    let phone = try Actor(f.group, f.secret, id: anna.id)
+    let sig = try invite.signature(for: LedgerCrypto.claimInput(groupID: f.group, key: pub(phone.key)))
+    #expect(try f.write(phone, .memberDeviceClaimed(.init(id: anna.id, key: pub(phone.key).base64URL, inviteKey: pub(invite).base64URL, inviteSig: sig.base64URL))) == nil)
+
+    // Only Anna herself or the admin removes Anna's devices.
+    let removePhone = EventData.memberDeviceRemoved(.init(id: anna.id, key: pub(phone.key).base64URL))
+    #expect(try f.write(ben, removePhone) == .forbidden)
+    #expect(try f.write(anna, .memberDeviceRemoved(.init(id: anna.id, key: pub(ben.key).base64URL))) == .unknownTarget)
+    #expect(try f.write(anna, removePhone) == nil)
+    #expect(f.ledger.state.members[anna.id]?.keys == [pub(anna.key)])
+    #expect(f.ledger.state.removedKeys.contains(pub(phone.key)))
+    #expect(try f.write(anna, removePhone) == .unknownTarget)
+
+    // The removed device can't write any more, and its key can't come back.
+    #expect(try f.write(phone, .memberUpdated(.init(id: anna.id, name: "Thief"))) == .badSignature)
+    let again = Curve25519.Signing.PrivateKey()
+    #expect(try f.write(anna, .memberDeviceInvited(.init(id: anna.id, inviteKey: pub(again).base64URL))) == nil)
+    let sig2 = try again.signature(for: LedgerCrypto.claimInput(groupID: f.group, key: pub(phone.key)))
+    #expect(try f.write(phone, .memberDeviceClaimed(.init(id: anna.id, key: pub(phone.key).base64URL, inviteKey: pub(again).base64URL, inviteSig: sig2.base64URL))) == .invalidData)
+
+    // Reset: the admin removes Anna's last key; she is a seat again, keeps her
+    // payments, and her pending device invites are gone.
+    let p = f.payment(amount: 1000, track: true, in: [(anna.id, 1000)], out: [(ben.id, 1000)])
+    #expect(try f.write(anna, .paymentCreated(p)) == nil)
+    #expect(try f.write(f.admin, .memberDeviceRemoved(.init(id: anna.id, key: pub(anna.key).base64URL))) == nil)
+    let seat = try #require(f.ledger.state.members[anna.id])
+    #expect(!seat.isClaimed && seat.inviteKey == nil && seat.deviceInvites.isEmpty)
+    #expect(try f.write(ben, .arrivalRecorded(.init(id: "a1", payment: p.id, member: anna.id, amount: 500))) == nil)
+
+    let fresh = Curve25519.Signing.PrivateKey()
+    #expect(try f.write(f.admin, .memberInviteRenewed(.init(id: anna.id, inviteKey: pub(fresh).base64URL))) == nil)
+    let newPhone = try Actor(f.group, f.secret, id: anna.id)
+    let claimSig = try fresh.signature(for: LedgerCrypto.claimInput(groupID: f.group, key: pub(newPhone.key)))
+    #expect(try f.write(newPhone, .memberClaimed(.init(id: anna.id, key: pub(newPhone.key).base64URL, inviteSig: claimSig.base64URL))) == nil)
+    #expect(f.ledger.state.members[anna.id]?.keys == [pub(newPhone.key)])
+    #expect(f.ledger.state.payments[p.id]?.creator == anna.id)
+    #expect(try f.write(newPhone, .paymentDeleted(.init(id: p.id))) == nil)
+
+    var replay = try Ledger(groupID: f.group, secret: f.secret)
+    replay.apply(f.server.events)
+    #expect(replay.state == f.ledger.state)
+}
+
+/// The recovery key replaces the admin's devices (§7.3 member.recovered, §7.2).
+@Test func adminRecovery() throws {
+    var f = try Fixture()
+    let anna = try f.join("Anna")
+    let deviceInvite = Curve25519.Signing.PrivateKey()
+    #expect(try f.write(f.admin, .memberDeviceInvited(.init(id: f.admin.id, inviteKey: pub(deviceInvite).base64URL))) == nil)
+
+    func recover(_ device: Actor, with key: Curve25519.Signing.PrivateKey, id: MemberID? = nil) throws -> Rejection? {
+        let sig = try key.signature(for: LedgerCrypto.recoverInput(groupID: f.group, key: pub(device.key)))
+        return try f.write(device, .memberRecovered(.init(id: id ?? device.id, key: pub(device.key).base64URL, recoverySig: sig.base64URL)))
+    }
+
+    // Only the admin's seat, only with the recovery key, and not with a claim signature.
+    let annaNew = try Actor(f.group, f.secret, id: anna.id)
+    #expect(try recover(annaNew, with: f.recovery) == .forbidden)
+    let restored = try Actor(f.group, f.secret, id: f.admin.id)
+    #expect(try recover(restored, with: Curve25519.Signing.PrivateKey()) == .badRecoverySig)
+    let claimSig = try f.recovery.signature(for: LedgerCrypto.claimInput(groupID: f.group, key: pub(restored.key)))
+    #expect(try f.write(restored, .memberRecovered(.init(id: f.admin.id, key: pub(restored.key).base64URL, recoverySig: claimSig.base64URL))) == .badRecoverySig)
+    #expect(try recover(restored, with: f.recovery) == nil)
+
+    let admin = try #require(f.ledger.state.members[f.admin.id])
+    #expect(admin.keys == [pub(restored.key)] && admin.deviceInvites.isEmpty)
+    #expect(f.ledger.state.removedKeys.contains(pub(f.admin.key)))
+    #expect(try f.write(f.admin, .groupUpdated(.init(name: "Lost phone"))) == .badSignature)
+    #expect(try f.write(restored, .groupUpdated(.init(name: "Italien 2026"))) == nil)
+    #expect(try recover(restored, with: f.recovery) == .invalidData) // key reuse
+
+    // A new recovery key: admin only, new key, the old one stops working.
+    let next = Curve25519.Signing.PrivateKey()
+    let change = EventData.groupRecoveryChanged(.init(recoveryKey: pub(next).base64URL))
+    #expect(try f.write(anna, change) == .forbidden)
+    #expect(try f.write(restored, .groupRecoveryChanged(.init(recoveryKey: pub(f.admin.key).base64URL))) == .invalidData)
+    #expect(try f.write(restored, change) == nil)
+    #expect(f.ledger.state.recoveryKey == pub(next))
+    let second = try Actor(f.group, f.secret, id: f.admin.id)
+    #expect(try recover(second, with: f.recovery) == .badRecoverySig)
+    #expect(try recover(second, with: next) == nil)
+    #expect(f.ledger.state.members[f.admin.id]?.keys == [pub(second.key)])
+}
+
+/// group.created needs a recovery key different from the admin key.
+@Test func genesisNeedsRecoveryKey() throws {
+    let group = UUID.v7()
+    let secret = Data.random(32)
+    let admin = try Actor(group, secret)
+    let k = pub(admin.key).base64URL
+    let e = try admin.writer.write(.groupCreated(.init(name: "G", currency: "EUR", admin: .init(id: admin.id, name: "A", key: k), recoveryKey: k)),
+                                   seen: LedgerState(groupID: group).head)
+    var l = try Ledger(groupID: group, secret: secret)
+    l.apply([RawEvent(seq: 1, id: e.id, blob: e.blob)])
+    #expect(l.state.history.first?.rejection == .invalidData)
+    #expect(l.state.inconsistency != nil)
 }

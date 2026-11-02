@@ -19,8 +19,9 @@ func twoDevicesShareALedger() async throws {
     defer { try? FileManager.default.removeItem(at: tmp) }
 
     // Device 1: Jonas creates the group and adds Ben.
-    let jonas = try await GroupSession.create(server: server, ownerToken: token, name: "Italien 2026", currency: "EUR",
-                                              myName: "Jonas", store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "jonas"))
+    let (jonas, kit) = try await GroupSession.create(server: server, token: token, name: "Italien 2026", currency: "EUR",
+                                                     myName: "Jonas", store: MemoryCredentialStore(), cacheRoot: tmp.appending(path: "jonas"))
+    #expect(RecoveryLink(kit.url) == kit)
     #expect(jonas.isAdmin)
     #expect(jonas.state.name == "Italien 2026")
     #expect(jonas.pendingCount == 0)
@@ -98,4 +99,68 @@ func twoDevicesShareALedger() async throws {
     await #expect(throws: ServerError.self) {
         _ = try await eve.read(signer: .init(), groupID: jonas.id, after: 0)
     }
+}
+
+/// A creation link from the server owner, lost devices, a reset member and a
+/// recovered admin (PROTOCOL.md §5.4 steps 0, 6–9).
+@MainActor
+@Test(.enabled(if: enabled))
+func lostDevicesAndRecovery() async throws {
+    let server = URL(string: env["OB_TEST_SERVER"]!)!
+    let token = env["OB_TEST_OWNER_TOKEN"] ?? ""
+    let tmp = FileManager.default.temporaryDirectory.appending(path: "ob-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    func dir(_ name: String) -> URL { tmp.appending(path: name) }
+
+    // The server owner lets Anna create a group; the code works once.
+    let (code, _) = try await ServerClient(base: server).createCreationCode(ownerToken: token, expiresInHours: 1)
+    let creation = try #require(CreationLink(CreationLink(server: server, code: code).url))
+    let (anna, kit) = try await GroupSession.create(server: server, token: creation.code, name: "WG", currency: "EUR", myName: "Anna",
+                                                    store: MemoryCredentialStore(), cacheRoot: dir("anna"))
+    await #expect(throws: FlowError.creationCodeUsed) {
+        _ = try await GroupSession.create(server: server, token: creation.code, name: "WG 2", currency: "EUR", myName: "Eve",
+                                          store: MemoryCredentialStore(), cacheRoot: dir("eve"))
+    }
+
+    // Ben joins on his phone and adds his laptop; he loses the phone and
+    // removes it from the laptop.
+    let ben = try await GroupSession.join(try await anna.addMember(name: "Ben"), store: MemoryCredentialStore(), cacheRoot: dir("ben"))
+    let laptop = try await GroupSession.join(try await ben.addDevice(), store: MemoryCredentialStore(), cacheRoot: dir("laptop"))
+    try await laptop.removeDevice(of: ben.me, key: ben.deviceKey)
+    await #expect(throws: ServerError.self) { try await ben.syncNow() }
+    #expect(ben.isRemoved)
+    #expect(laptop.state.members[ben.me]?.keys == [laptop.deviceKey])
+
+    // Then the laptop is lost too: Anna resets Ben, who joins again as himself.
+    let p = Payment(id: UUID.v7().lower, kind: .expense, title: "Strom", date: "2026-11-02", amount: 9_000, track: false,
+                    in: .init(mode: "exact", lines: [.init(member: anna.me, amount: 4_500), .init(member: ben.me, amount: 4_500)]),
+                    out: .init(mode: "exact", lines: [.init(member: laptop.me, amount: 9_000)]))
+    try laptop.submit(.paymentCreated(p))
+    try await laptop.syncNow()
+    try await anna.syncNow()
+    let again = try await anna.resetMember(ben.me)
+    try? await laptop.syncNow()
+    #expect(laptop.isRemoved)
+    let benNew = try await GroupSession.join(again, store: MemoryCredentialStore(), cacheRoot: dir("benNew"))
+    #expect(benNew.me == ben.me)
+    #expect(benNew.state.summary.balances[ben.me] == 4_500)
+
+    // Anna loses her phone and restores the group with her recovery kit.
+    let restored = try await GroupSession.recover(try #require(RecoveryLink(kit.url)), store: MemoryCredentialStore(), cacheRoot: dir("restored"))
+    #expect(restored.isAdmin)
+    #expect(restored.state.members[anna.me]?.keys == [restored.deviceKey])
+    try? await anna.syncNow()
+    #expect(anna.isRemoved)
+    #expect(!anna.isAdmin)
+
+    // A new kit replaces the old one.
+    let newKit = try await restored.newRecoveryKit()
+    await #expect(throws: FlowError.recoveryReplaced) {
+        _ = try await GroupSession.recover(kit, store: MemoryCredentialStore(), cacheRoot: dir("old-kit"))
+    }
+    let restored2 = try await GroupSession.recover(newKit, store: MemoryCredentialStore(), cacheRoot: dir("restored2"))
+    #expect(restored2.isAdmin)
+    try await benNew.syncNow()
+    #expect(benNew.state.history.filter { $0.rejection != nil }.isEmpty)
+    #expect(benNew.state == restored2.state)
 }

@@ -14,7 +14,7 @@ import (
 const claimInvite = `-- name: ClaimInvite :one
 UPDATE group_keys SET status = 'claimed', updated_at = now()
 WHERE group_id = $1 AND public_key = $2 AND role = 'invite' AND status = 'pending'
-RETURNING grant_role
+RETURNING grant_role, seat
 `
 
 type ClaimInviteParams struct {
@@ -22,16 +22,21 @@ type ClaimInviteParams struct {
 	PublicKey []byte
 }
 
-// Marks a pending invite claimed and returns the role the new key gets.
-func (q *Queries) ClaimInvite(ctx context.Context, arg ClaimInviteParams) (*string, error) {
+type ClaimInviteRow struct {
+	GrantRole *string
+	Seat      []byte
+}
+
+// Marks a pending invite claimed and returns the role and seat the new key gets.
+func (q *Queries) ClaimInvite(ctx context.Context, arg ClaimInviteParams) (ClaimInviteRow, error) {
 	row := q.db.QueryRow(ctx, claimInvite, arg.GroupID, arg.PublicKey)
-	var grant_role *string
-	err := row.Scan(&grant_role)
-	return grant_role, err
+	var i ClaimInviteRow
+	err := row.Scan(&i.GrantRole, &i.Seat)
+	return i, err
 }
 
 const getKey = `-- name: GetKey :one
-SELECT role, status FROM group_keys WHERE group_id = $1 AND public_key = $2
+SELECT role, status, seat FROM group_keys WHERE group_id = $1 AND public_key = $2
 `
 
 type GetKeyParams struct {
@@ -42,18 +47,19 @@ type GetKeyParams struct {
 type GetKeyRow struct {
 	Role   string
 	Status string
+	Seat   []byte
 }
 
 func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, error) {
 	row := q.db.QueryRow(ctx, getKey, arg.GroupID, arg.PublicKey)
 	var i GetKeyRow
-	err := row.Scan(&i.Role, &i.Status)
+	err := row.Scan(&i.Role, &i.Status, &i.Seat)
 	return i, err
 }
 
 const insertInvite = `-- name: InsertInvite :execrows
-INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role)
-VALUES ($1, $2, 'invite', 'pending', $3, $4)
+INSERT INTO group_keys (group_id, public_key, role, status, created_by, grant_role, seat)
+VALUES ($1, $2, 'invite', 'pending', $3, $4, $5)
 ON CONFLICT DO NOTHING
 `
 
@@ -62,6 +68,7 @@ type InsertInviteParams struct {
 	PublicKey []byte
 	CreatedBy []byte
 	GrantRole *string
+	Seat      []byte
 }
 
 func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int64, error) {
@@ -70,6 +77,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int
 		arg.PublicKey,
 		arg.CreatedBy,
 		arg.GrantRole,
+		arg.Seat,
 	)
 	if err != nil {
 		return 0, err
@@ -78,7 +86,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (int
 }
 
 const insertKey = `-- name: InsertKey :execrows
-INSERT INTO group_keys (group_id, public_key, role, status) VALUES ($1, $2, $3, $4)
+INSERT INTO group_keys (group_id, public_key, role, status, seat) VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT DO NOTHING
 `
 
@@ -87,6 +95,7 @@ type InsertKeyParams struct {
 	PublicKey []byte
 	Role      string
 	Status    string
+	Seat      []byte
 }
 
 func (q *Queries) InsertKey(ctx context.Context, arg InsertKeyParams) (int64, error) {
@@ -95,11 +104,64 @@ func (q *Queries) InsertKey(ctx context.Context, arg InsertKeyParams) (int64, er
 		arg.PublicKey,
 		arg.Role,
 		arg.Status,
+		arg.Seat,
 	)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const removeKey = `-- name: RemoveKey :execrows
+UPDATE group_keys SET status = 'removed', updated_at = now()
+WHERE group_id = $1 AND public_key = $2 AND role IN ('admin', 'member') AND status = 'active'
+  AND ($3::boolean OR seat = $4)
+`
+
+type RemoveKeyParams struct {
+	GroupID    uuid.UUID
+	PublicKey  []byte
+	AnySeat    bool
+	CallerSeat []byte
+}
+
+// The admin removes any member or admin key, a member only keys of its own seat.
+func (q *Queries) RemoveKey(ctx context.Context, arg RemoveKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeKey,
+		arg.GroupID,
+		arg.PublicKey,
+		arg.AnySeat,
+		arg.CallerSeat,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removeRecoveryKeys = `-- name: RemoveRecoveryKeys :exec
+UPDATE group_keys SET status = 'removed', updated_at = now()
+WHERE group_id = $1 AND role = 'recovery' AND status = 'active'
+`
+
+func (q *Queries) RemoveRecoveryKeys(ctx context.Context, groupID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, removeRecoveryKeys, groupID)
+	return err
+}
+
+const removeSeat = `-- name: RemoveSeat :exec
+UPDATE group_keys SET status = 'removed', updated_at = now()
+WHERE group_id = $1 AND seat = $2 AND role IN ('admin', 'member') AND status = 'active'
+`
+
+type RemoveSeatParams struct {
+	GroupID uuid.UUID
+	Seat    []byte
+}
+
+func (q *Queries) RemoveSeat(ctx context.Context, arg RemoveSeatParams) error {
+	_, err := q.db.Exec(ctx, removeSeat, arg.GroupID, arg.Seat)
+	return err
 }
 
 const revokeInvite = `-- name: RevokeInvite :execrows
@@ -127,4 +189,37 @@ func (q *Queries) RevokeInvite(ctx context.Context, arg RevokeInviteParams) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const revokeInvitesCreatedBy = `-- name: RevokeInvitesCreatedBy :exec
+UPDATE group_keys SET status = 'revoked', updated_at = now()
+WHERE group_id = $1 AND role = 'invite' AND status = 'pending' AND created_by = $2
+`
+
+type RevokeInvitesCreatedByParams struct {
+	GroupID uuid.UUID
+	Creator []byte
+}
+
+func (q *Queries) RevokeInvitesCreatedBy(ctx context.Context, arg RevokeInvitesCreatedByParams) error {
+	_, err := q.db.Exec(ctx, revokeInvitesCreatedBy, arg.GroupID, arg.Creator)
+	return err
+}
+
+const revokeInvitesOfSeat = `-- name: RevokeInvitesOfSeat :exec
+UPDATE group_keys SET status = 'revoked', updated_at = now()
+WHERE group_keys.group_id = $1 AND group_keys.role = 'invite' AND group_keys.status = 'pending'
+  AND group_keys.created_by IN (
+    SELECT k.public_key FROM group_keys k WHERE k.group_id = $1 AND k.seat = $2 AND k.role IN ('admin', 'member'))
+`
+
+type RevokeInvitesOfSeatParams struct {
+	GroupID uuid.UUID
+	Seat    []byte
+}
+
+// Pending invites created by any key of the seat.
+func (q *Queries) RevokeInvitesOfSeat(ctx context.Context, arg RevokeInvitesOfSeatParams) error {
+	_, err := q.db.Exec(ctx, revokeInvitesOfSeat, arg.GroupID, arg.Seat)
+	return err
 }
