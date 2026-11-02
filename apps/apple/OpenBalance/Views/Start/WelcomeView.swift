@@ -36,6 +36,9 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.glass)
                 .controlSize(.large)
+                Button("Restore with a recovery kit") { showJoin = true }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
                 Text("To join, ask the group's admin to add you and show you your invite QR code.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

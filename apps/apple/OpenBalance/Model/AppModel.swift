@@ -4,7 +4,7 @@ import LedgerSync
 import Observation
 
 /// App-wide state: the groups on this device, which one is active, the
-/// servers this device may create groups on, and pending invite links.
+/// servers this device may create groups on, and links opened from outside.
 @MainActor @Observable
 final class AppModel {
     private(set) var sessions: [GroupSession] = []
@@ -15,12 +15,15 @@ final class AppModel {
             updateLive()
         }
     }
-    /// An invite opened from a link or scanned, waiting for the join sheet.
-    var pendingInvite: InviteLink?
+    /// An invite, recovery or creation link opened from outside, waiting for its sheet.
+    var pendingLink: AppLink?
     var toast: String?
     private var foreground = false
 
     init() {
+        // Earlier builds kept keys in iCloud Keychain; keys now stay on the device.
+        KeychainStore.groups.deleteSynced()
+        KeychainStore.servers.deleteSynced()
         load()
     }
 
@@ -52,8 +55,8 @@ final class AppModel {
     // MARK: - Links
 
     func handle(url: URL) {
-        if let link = InviteLink(url) {
-            pendingInvite = link
+        if let link = AppLink(url) {
+            pendingLink = link
         } else {
             toast = String(localized: "This link is not a valid Open Balance invite.")
         }
@@ -72,9 +75,31 @@ final class AppModel {
         activeID = session.id
     }
 
-    func create(on server: ServerOwnership, name: String, currency: String, myName: String) async throws {
-        let session = try await GroupSession.create(server: server.server, ownerToken: server.token, name: name, currency: currency, myName: myName)
+    /// Take over the admin's seat with a recovery kit. A group this device
+    /// still has is just shown; one it was removed from is forgotten first.
+    func recover(_ link: RecoveryLink) async throws {
+        if let existing = sessions.first(where: { $0.id == link.groupID }) {
+            if !existing.isRemoved {
+                activeID = existing.id
+                return
+            }
+            forget(existing)
+        }
+        let interrupted = KeychainCredentialStore().all().first { $0.groupID == link.groupID && $0.memberID == link.adminID }
+        let session = try await GroupSession.recover(link, existing: interrupted)
         sessions.append(session)
+        activeID = session.id
+    }
+
+    /// Create a group with the owner token or a creation code. The caller
+    /// shows the recovery kit, then `add`s the session: showing the group
+    /// right away would close the sheet before the kit is saved.
+    func create(server: URL, token: String, name: String, currency: String, myName: String) async throws -> (GroupSession, RecoveryLink) {
+        try await GroupSession.create(server: server, token: token, name: name, currency: currency, myName: myName)
+    }
+
+    func add(_ session: GroupSession) {
+        if !sessions.contains(where: { $0.id == session.id }) { sessions.append(session) }
         activeID = session.id
     }
 
@@ -93,6 +118,12 @@ final class AppModel {
         try KeychainStore.servers.save(ownership, account: url.absoluteString)
         servers.removeAll { $0.server == url }
         servers.append(ownership)
+    }
+
+    /// A one-time link (7 days) that lets someone else create a group here.
+    func creationLink(for s: ServerOwnership) async throws -> CreationLink {
+        let (code, _) = try await ServerClient(base: s.server).createCreationCode(ownerToken: s.token)
+        return CreationLink(server: s.server, code: code)
     }
 
     func removeServer(_ s: ServerOwnership) {

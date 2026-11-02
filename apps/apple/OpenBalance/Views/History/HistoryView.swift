@@ -123,6 +123,9 @@ struct HistoryView: View {
         case .groupUpdated(let d):
             return .init(subject: .symbol("person.3"), badge: "pencil", badgeColor: .gray, title: d.name,
                          detail: String(localized: "Group renamed by \(by)"))
+        case .groupRecoveryChanged:
+            return .init(subject: .symbol("person.3"), badge: "key.horizontal", badgeColor: .gray, title: session.state.name,
+                         detail: String(localized: "Recovery kit replaced by \(by)"))
         case .memberAdded(let d):
             return .init(subject: member(d.id), title: memberName(d.id),
                          detail: String(localized: "Added by \(by)"))
@@ -144,6 +147,12 @@ struct HistoryView: View {
         case .memberDeviceInviteRevoked(let d):
             return .init(subject: member(d.id), badge: "xmark", badgeColor: Theme.negative, title: memberName(d.id),
                          detail: String(localized: "Device QR code revoked by \(by)"))
+        case .memberDeviceRemoved(let d):
+            return .init(subject: member(d.id), badge: "minus", badgeColor: Theme.negative, title: memberName(d.id),
+                         detail: String(localized: "Device removed by \(by)"))
+        case .memberRecovered(let d):
+            return .init(subject: member(d.id), badge: "key.horizontal", badgeColor: Theme.positive, title: memberName(d.id),
+                         detail: String(localized: "Restored on a new device"))
         case .paymentCreated(let p):
             return .init(subject: .symbol(p.displayKind.symbol), title: title(p),
                          detail: String(localized: "\(p.displayKind.label) · by \(by)"), amount: p.amount, payment: p.id)
@@ -189,6 +198,7 @@ struct HistoryView: View {
         case .misplaced: String(localized: "out of place")
         case .alreadyClaimed: String(localized: "member already joined")
         case .badInviteSig: String(localized: "invite doesn't match")
+        case .badRecoverySig: String(localized: "recovery kit doesn't match")
         }
     }
 }
@@ -297,7 +307,8 @@ enum HistoryFilter: CaseIterable, Hashable {
         case (.arrivals, .arrivalRecorded?), (.arrivals, .arrivalRemoved?): true
         case (.members, .groupCreated?), (.members, .groupUpdated?), (.members, .memberAdded?),
              (.members, .memberInviteRenewed?), (.members, .memberClaimed?), (.members, .memberUpdated?),
-             (.members, .memberDeviceInvited?), (.members, .memberDeviceClaimed?), (.members, .memberDeviceInviteRevoked?): true
+             (.members, .memberDeviceInvited?), (.members, .memberDeviceClaimed?), (.members, .memberDeviceInviteRevoked?),
+             (.members, .groupRecoveryChanged?), (.members, .memberDeviceRemoved?), (.members, .memberRecovered?): true
         default: false
         }
     }

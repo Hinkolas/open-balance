@@ -163,6 +163,16 @@
         }
       }
     },
+    "%@'s devices are removed from the group and you get a new invite for %@'s new device. Payments and balance stay." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Geräte von %1$@ werden aus der Gruppe entfernt und du bekommst eine neue Einladung für das neue Gerät. Zahlungen und Saldo bleiben."
+          }
+        }
+      }
+    },
     "= %@" : {
       "localizations" : {
         "de" : {
@@ -259,6 +269,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Server hinzufügen"
+          }
+        }
+      }
+    },
+    "Added %@ · %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinzugefügt am %1$@ · %2$@"
           }
         }
       }
@@ -499,12 +519,42 @@
         }
       }
     },
+    "Couldn't create a recovery kit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellungs-Kit konnte nicht erstellt werden"
+          }
+        }
+      }
+    },
     "Couldn't create the invite" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Einladung konnte nicht erstellt werden"
+          }
+        }
+      }
+    },
+    "Couldn't create the link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link konnte nicht erstellt werden"
+          }
+        }
+      }
+    },
+    "Couldn't reset access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugang konnte nicht zurückgesetzt werden"
           }
         }
       }
@@ -545,6 +595,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gruppe erstellen"
+          }
+        }
+      }
+    },
+    "Create a new recovery kit?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neues Wiederherstellungs-Kit erstellen?"
           }
         }
       }
@@ -619,6 +679,16 @@
         }
       }
     },
+    "Device removed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerät entfernt von %@"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "de" : {
@@ -635,6 +705,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "doppelt"
+          }
+        }
+      }
+    },
+    "Each device has its own key, and the key never leaves it. If you lose a device, remove it here from another one. If you lose all of them, ask the admin to reset your access." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Gerät hat seinen eigenen Schlüssel, der es nie verlässt. Verlierst du ein Gerät, entferne es hier von einem anderen aus. Verlierst du alle, bitte den Admin, deinen Zugang zurückzusetzen."
+          }
+        }
+      }
+    },
+    "Each device has its own key, and the key never leaves it. If you lose a device, remove it here from another one. If you lose all of them, restore the group with your recovery kit." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Gerät hat seinen eigenen Schlüssel, der es nie verlässt. Verlierst du ein Gerät, entferne es hier von einem anderen aus. Verlierst du alle, stellst du die Gruppe mit deinem Wiederherstellungs-Kit wieder her."
           }
         }
       }
@@ -839,12 +929,82 @@
         }
       }
     },
+    "Give this to the person who will run the group. It works once, for 7 days. You won't be a member and can't read the group." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib das der Person, die die Gruppe führen wird. Es funktioniert einmal und 7 Tage lang. Du wirst kein Mitglied und kannst die Gruppe nicht lesen."
+          }
+        }
+      }
+    },
     "Group" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gruppe"
+          }
+        }
+      }
+    },
+    "I saved it" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ich habe ihn gesichert"
+          }
+        }
+      }
+    },
+    "If you lose this device, this link makes a new device the admin of %@. Keep it in your password manager: anyone who has it can read the group and act as its admin." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn du dieses Gerät verlierst, macht dieser Link ein neues Gerät zum Admin von %@. Bewahre ihn in deinem Passwort-Manager auf: Wer ihn hat, kann die Gruppe lesen und als Admin handeln."
+          }
+        }
+      }
+    },
+    "It can no longer read or write in this group. Do this when a device is lost or someone stops sharing your member." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es kann in dieser Gruppe nichts mehr lesen oder schreiben. Mach das, wenn ein Gerät verloren ist oder jemand dein Mitglied nicht mehr teilt."
+          }
+        }
+      }
+    },
+    "It no longer has access to %@. To come back, ask the admin or one of your other devices for a new invite." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es hat keinen Zugriff mehr auf %@. Um zurückzukommen, bitte den Admin oder eins deiner anderen Geräte um eine neue Einladung."
+          }
+        }
+      }
+    },
+    "Let someone create a group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jemanden eine Gruppe erstellen lassen"
+          }
+        }
+      }
+    },
+    "New recovery kit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neues Wiederherstellungs-Kit"
           }
         }
       }
@@ -885,16 +1045,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gruppe von %@ umbenannt"
-          }
-        }
-      }
-    },
-    "openbalance://join?…" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openbalance://join?…"
           }
         }
       }
@@ -1390,12 +1540,32 @@
         }
       }
     },
-    "Or paste the invite link" : {
+    "openbalance://…" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oder Einladungslink einfügen"
+            "value" : "openbalance://…"
+          }
+        }
+      }
+    },
+    "Or paste the invite or recovery link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oder füge den Einladungs- oder Wiederherstellungslink ein"
+          }
+        }
+      }
+    },
+    "Other device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiteres Gerät"
           }
         }
       }
@@ -1536,6 +1706,26 @@
         }
       }
     },
+    "recovery kit doesn't match" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellungs-Kit passt nicht"
+          }
+        }
+      }
+    },
+    "Recovery kit replaced by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellungs-Kit ersetzt von %@"
+          }
+        }
+      }
+    },
     "refers to something that doesn't exist" : {
       "localizations" : {
         "de" : {
@@ -1562,6 +1752,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Von diesem Gerät entfernen"
+          }
+        }
+      }
+    },
+    "Remove this device?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät entfernen?"
           }
         }
       }
@@ -1612,6 +1812,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Von %@ umbenannt"
+          }
+        }
+      }
+    },
+    "Reset" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurücksetzen"
+          }
+        }
+      }
+    },
+    "Reset %@'s access?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugang von %@ zurücksetzen?"
+          }
+        }
+      }
+    },
+    "Reset access" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugang zurücksetzen"
+          }
+        }
+      }
+    },
+    "Restore" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellen"
+          }
+        }
+      }
+    },
+    "Restore group" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe wiederherstellen"
+          }
+        }
+      }
+    },
+    "Restore with a recovery kit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Wiederherstellungs-Kit wiederherstellen"
+          }
+        }
+      }
+    },
+    "Restored on a new device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf einem neuen Gerät wiederhergestellt"
           }
         }
       }
@@ -1672,6 +1942,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sichern"
+          }
+        }
+      }
+    },
+    "Save your recovery kit" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichere dein Wiederherstellungs-Kit"
           }
         }
       }
@@ -1756,12 +2036,32 @@
         }
       }
     },
+    "Show a link that lets someone create a group on your server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einen Link anzeigen, mit dem jemand eine Gruppe auf deinem Server erstellen kann."
+          }
+        }
+      }
+    },
     "Show a QR code that lets another device write as you." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Einen QR-Code anzeigen, mit dem ein anderes Gerät als du schreiben kann."
+          }
+        }
+      }
+    },
+    "Show a recovery kit that makes a new device the admin." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Wiederherstellungs-Kit anzeigen, das ein neues Gerät zum Admin macht."
           }
         }
       }
@@ -1897,6 +2197,16 @@
         }
       }
     },
+    "The current recovery kit stops working." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das bisherige Kit funktioniert dann nicht mehr."
+          }
+        }
+      }
+    },
     "The faint bar shows where each balance lands once expected money arrives." : {
       "localizations" : {
         "de" : {
@@ -1937,6 +2247,36 @@
         }
       }
     },
+    "The server owner invited you to create a group. You'll be its admin." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server-Betreiber hat dich eingeladen, eine Gruppe zu erstellen. Du wirst ihr Admin."
+          }
+        }
+      }
+    },
+    "This device" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät"
+          }
+        }
+      }
+    },
+    "This device was removed" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät wurde entfernt"
+          }
+        }
+      }
+    },
     "This group" : {
       "localizations" : {
         "de" : {
@@ -1969,12 +2309,55 @@
         }
       }
     },
+    "This is the only time it's shown. This device doesn't keep it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er wird nur jetzt angezeigt. Dieses Gerät speichert ihn nicht."
+          }
+        }
+      }
+    },
     "This link is not a valid Open Balance invite." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieser Link ist keine gültige Open-Balance-Einladung."
+          }
+        }
+      }
+    },
+    "This link to create a group has been used, withdrawn or has expired. Ask the server owner for a new one." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Link zum Erstellen einer Gruppe wurde schon benutzt, zurückgezogen oder ist abgelaufen. Bitte den Server-Betreiber um einen neuen."
+          }
+        }
+      }
+    },
+    "This recovery kit doesn't match the group's admin." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Wiederherstellungs-Kit passt nicht zum Admin der Gruppe."
+          }
+        }
+      }
+    },
+    "This recovery kit no longer works. A newer one replaced it, or the group was deleted." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Wiederherstellungs-Kit funktioniert nicht mehr. Ein neueres hat es ersetzt, oder die Gruppe wurde gelöscht."
           }
         }
       }
@@ -2250,12 +2633,12 @@
         }
       }
     },
-    "With a server's admin token this device can create groups there. The token never gives access to any group's contents." : {
+    "With a server's admin token this device can create groups there and let others create them. The token never gives access to any group's contents." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mit dem Admin-Token eines Servers kann dieses Gerät dort Gruppen erstellen. Zugriff auf Inhalte einer Gruppe gibt das Token nie."
+            "value" : "Mit dem Admin-Token eines Servers kann dieses Gerät dort Gruppen erstellen und andere dort Gruppen erstellen lassen. Das Token gibt nie Zugriff auf die Inhalte einer Gruppe."
           }
         }
       }
@@ -2291,6 +2674,16 @@
         }
       }
     },
+    "You become the admin on this device. The admin's other devices are removed from the group." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du wirst auf diesem Gerät Admin. Die anderen Geräte des Admins werden aus der Gruppe entfernt."
+          }
+        }
+      }
+    },
     "You get" : {
       "localizations" : {
         "de" : {
@@ -2301,12 +2694,12 @@
         }
       }
     },
-    "You join as the member this invite is for. Your key stays on your devices and in your iCloud Keychain." : {
+    "You join as the member this invite is for. Your key stays on this device." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Du trittst als das Mitglied bei, für das diese Einladung ist. Dein Schlüssel bleibt auf deinen Geräten und in deinem iCloud-Schlüsselbund."
+            "value" : "Du trittst als das Mitglied bei, für das diese Einladung ist. Dein Schlüssel bleibt auf diesem Gerät."
           }
         }
       }
@@ -2387,6 +2780,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Saldo"
+          }
+        }
+      }
+    },
+    "Your devices" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Geräte"
           }
         }
       }

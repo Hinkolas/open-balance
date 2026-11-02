@@ -1,4 +1,5 @@
 import Design
+import LedgerCore
 import LedgerSync
 import SwiftUI
 
@@ -10,6 +11,14 @@ struct AppShell: View {
     @State private var historyFilter: HistoryFilter = .all
 
     var body: some View {
+        if session.isRemoved {
+            RemovedView(session: session)
+        } else {
+            tabs
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Overview", systemImage: "chart.bar.xaxis", value: .overview) {
                 NavigationStack {
@@ -34,3 +43,32 @@ struct AppShell: View {
 }
 
 enum AppTab: Hashable { case overview, settle, history, group }
+
+/// This device's key was removed from the group, or the server refuses it.
+struct RemovedView: View {
+    let session: GroupSession
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("This device was removed", systemImage: "iphone.slash")
+            } description: {
+                Text("It no longer has access to \(session.state.name). To come back, ask the admin or one of your other devices for a new invite.")
+            } actions: {
+                Button("Remove from this device", role: .destructive) { model.forget(session) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.negative)
+                let others = model.sessions.filter { $0.id != session.id }
+                if !others.isEmpty {
+                    Menu("Your groups") {
+                        ForEach(others) { s in
+                            Button(s.state.name) { model.activate(s.id) }
+                        }
+                    }
+                }
+            }
+        }
+        .tint(Theme.tint)
+    }
+}

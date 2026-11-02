@@ -12,11 +12,21 @@ struct GroupView: View {
     @State private var invite: InviteLink?
     @State private var deviceInvite: InviteLink?
     @State private var renaming: RenameTarget?
+    @State private var resetting: Member?
+    @State private var confirmNewKit = false
+    @State private var kit: RecoveryLink?
+    @State private var serverActions: ServerOwnership?
+    @State private var creationLink: CreationLink?
     @State private var joining = false
     @State private var creating = false
     @State private var addingServer = false
     @State private var confirmLeave = false
-    @State private var error: String?
+    @State private var failure: Failure?
+
+    struct Failure {
+        var title: String
+        var message: String
+    }
 
     var body: some View {
         List {
@@ -26,6 +36,7 @@ struct GroupView: View {
                 LabeledContent("Server", value: session.credentials.server.host() ?? session.credentials.server.absoluteString)
                 if session.isAdmin {
                     Button("Rename group", systemImage: "pencil") { renaming = .group(session.state.name) }
+                    Button("New recovery kit", systemImage: "key.horizontal") { confirmNewKit = true }
                 }
             }
             Section("Your groups") {
@@ -43,16 +54,18 @@ struct GroupView: View {
             }
             Section {
                 ForEach(model.servers) { s in
-                    LabeledContent(s.name, value: s.server.host() ?? "")
-                        .swipeActions {
-                            Button("Remove", systemImage: "trash", role: .destructive) { model.removeServer(s) }
-                        }
+                    Button { serverActions = s } label: {
+                        LabeledContent(s.name, value: s.server.host() ?? "").foregroundStyle(.primary)
+                    }
+                    .swipeActions {
+                        Button("Remove", systemImage: "trash", role: .destructive) { model.removeServer(s) }
+                    }
                 }
                 Button("Add server", systemImage: "server.rack") { addingServer = true }
             } header: {
                 Text("Servers you own")
             } footer: {
-                Text("With a server's admin token this device can create groups there. The token never gives access to any group's contents.")
+                Text("With a server's admin token this device can create groups there and let others create them. The token never gives access to any group's contents.")
             }
             Section {
                 Button("Remove from this device", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmLeave = true }
@@ -69,10 +82,28 @@ struct GroupView: View {
         .sheet(isPresented: $joining) { JoinSheet(link: nil) }
         .sheet(isPresented: $creating) { CreateGroupSheet() }
         .sheet(isPresented: $addingServer) { AddServerSheet { _ in } }
-        .alert("Couldn't create the invite", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .sheet(item: $kit) { RecoveryKitSheet(groupName: session.state.name, link: $0) }
+        .sheet(item: $creationLink) { CreationLinkSheet(link: $0) }
+        .alert(failure?.title ?? "", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(error ?? "")
+            Text(failure?.message ?? "")
+        }
+        .confirmationDialog(resetting.map { String(localized: "Reset \($0.name)'s access?") } ?? "",
+                            isPresented: Binding(get: { resetting != nil }, set: { if !$0 { resetting = nil } }),
+                            titleVisibility: .visible, presenting: resetting) { m in
+            Button("Reset", role: .destructive) { reset(m) }
+        } message: { m in
+            Text("\(m.name)'s devices are removed from the group and you get a new invite for \(m.name)'s new device. Payments and balance stay.")
+        }
+        .confirmationDialog("Create a new recovery kit?", isPresented: $confirmNewKit, titleVisibility: .visible) {
+            Button("Create") { newKit() }
+        } message: {
+            Text("The current recovery kit stops working.")
+        }
+        .confirmationDialog(serverActions?.name ?? "", isPresented: Binding(get: { serverActions != nil }, set: { if !$0 { serverActions = nil } }),
+                            titleVisibility: .visible, presenting: serverActions) { s in
+            Button("Let someone create a group") { showCreationLink(s) }
         }
         .confirmationDialog("Remove this group from this device?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Remove from this device", role: .destructive) { model.forget(session) }
@@ -106,8 +137,15 @@ struct GroupView: View {
                     if m.id == session.me {
                         Button("Add a device", systemImage: "qrcode") { showDeviceInvite() }
                     }
+                    if canReset(m) {
+                        Button("Reset access", systemImage: "arrow.counterclockwise", role: .destructive) { resetting = m }
+                    }
                 }
                 .swipeActions {
+                    if canReset(m) {
+                        Button("Reset access", systemImage: "arrow.counterclockwise") { resetting = m }
+                            .tint(Theme.negative)
+                    }
                     if session.isAdmin || m.id == session.me {
                         Button("Rename", systemImage: "pencil") { renaming = .member(m.id, m.name) }
                     }
@@ -116,7 +154,12 @@ struct GroupView: View {
             if session.isAdmin {
                 Button("Add member", systemImage: "person.badge.plus") { addingMember = true }
             }
-            Button("Add a device", systemImage: "qrcode") { showDeviceInvite() }
+            NavigationLink {
+                DevicesView(session: session)
+            } label: {
+                Label("Your devices", systemImage: "laptopcomputer.and.iphone")
+                    .badge(session.state.members[session.me]?.keys.count ?? 0)
+            }
         } header: {
             Text("Members")
         } footer: {
@@ -133,13 +176,19 @@ struct GroupView: View {
         return String(localized: "\(role) · \(m.keys.count) devices")
     }
 
+    private func canReset(_ m: Member) -> Bool { session.isAdmin && m.isClaimed && m.id != session.me }
+
+    private func inviteFailed(_ error: Error) {
+        failure = .init(title: String(localized: "Couldn't create the invite"), message: error.localizedDescription)
+    }
+
     private func showDeviceInvite() {
         Task {
             guard await DeviceOwner.confirm(String(localized: "Show a QR code that lets another device write as you.")) else { return }
             do {
                 deviceInvite = try await session.addDevice()
             } catch {
-                self.error = error.localizedDescription
+                inviteFailed(error)
             }
         }
     }
@@ -155,7 +204,41 @@ struct GroupView: View {
             do {
                 invite = try await session.renewInvite(for: member)
             } catch {
-                self.error = error.localizedDescription
+                inviteFailed(error)
+            }
+        }
+    }
+
+    /// Remove all of the member's devices and show the invite for its new one.
+    private func reset(_ m: Member) {
+        Task {
+            guard await DeviceOwner.confirm(String(localized: "Show an invite that lets someone join this group.")) else { return }
+            do {
+                invite = try await session.resetMember(m.id)
+            } catch {
+                failure = .init(title: String(localized: "Couldn't reset access"), message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func newKit() {
+        Task {
+            guard await DeviceOwner.confirm(String(localized: "Show a recovery kit that makes a new device the admin.")) else { return }
+            do {
+                kit = try await session.newRecoveryKit()
+            } catch {
+                failure = .init(title: String(localized: "Couldn't create a recovery kit"), message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func showCreationLink(_ s: ServerOwnership) {
+        Task {
+            guard await DeviceOwner.confirm(String(localized: "Show a link that lets someone create a group on your server.")) else { return }
+            do {
+                creationLink = try await model.creationLink(for: s)
+            } catch {
+                failure = .init(title: String(localized: "Couldn't create the link"), message: error.localizedDescription)
             }
         }
     }
@@ -326,21 +409,53 @@ struct InviteQRContent<Footer: View>: View {
     let link: InviteLink
     var isDevice = false
     @ViewBuilder var footer: Footer
-    @State private var copied = false
 
     var body: some View {
         let name = session.name(link.memberID)
         let me = session.state.members[session.me]?.name ?? ""
+        ShareQRContent(
+            title: isDevice ? String(localized: "Add a device") : String(localized: "Invite \(name)"),
+            message: isDevice
+                ? String(localized: "Scan this on the other device. It joins as \(me): it sees the group and writes as \(me). It works once, so show it only to the person you mean.")
+                : String(localized: "Let \(name) scan this with the iPhone camera. It works once and contains the group's key, so show it only to them."),
+            url: link.url, footer: { footer })
+    }
+}
+
+/// The server owner's one-time link for someone else to create a group.
+struct CreationLinkSheet: View {
+    let link: CreationLink
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ShareQRContent(
+                title: String(localized: "Let someone create a group"),
+                message: String(localized: "Give this to the person who will run the group. It works once, for 7 days. You won't be a member and can't read the group."),
+                url: link.url, footer: { EmptyView() })
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+/// A link with its QR code, Share and Copy.
+struct ShareQRContent<Footer: View>: View {
+    let title: String
+    let message: String
+    let url: URL
+    @ViewBuilder var footer: Footer
+    @State private var copied = false
+
+    var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(spacing: 6) {
-                    Text(isDevice ? String(localized: "Add a device") : String(localized: "Invite \(name)")).font(.title2.bold())
-                    Text(isDevice
-                         ? String(localized: "Scan this on the other device. It joins as \(me): it sees the group and writes as \(me). It works once, so show it only to the person you mean.")
-                         : String(localized: "Let \(name) scan this with the iPhone camera. It works once and contains the group's key, so show it only to them."))
+                    Text(title).font(.title2.bold())
+                    Text(message)
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
-                if let image = QRCode.image(link.url.absoluteString) {
+                if let image = QRCode.image(url.absoluteString) {
                     Image(uiImage: image)
                         .interpolation(.none)
                         .resizable()
@@ -351,10 +466,10 @@ struct InviteQRContent<Footer: View>: View {
                         .accessibilityLabel(String(localized: "Invite QR code"))
                 }
                 HStack(spacing: 12) {
-                    ShareLink(item: link.url) { Label("Share", systemImage: "square.and.arrow.up") }
+                    ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
                         .buttonStyle(.bordered)
                     Button(copied ? String(localized: "Copied") : String(localized: "Copy link"), systemImage: copied ? "checkmark" : "doc.on.doc") {
-                        UIPasteboard.general.string = link.url.absoluteString
+                        UIPasteboard.general.string = url.absoluteString
                         copied = true
                     }
                     .buttonStyle(.bordered)
