@@ -152,7 +152,7 @@
     <string name="name">Name</string>
     <string name="add_member_footer">Du bekommst einen QR-Code, mit dem nur diese Person einmal beitreten kann.</string>
     <string name="invite_member_title">%1$s einladen</string>
-    <string name="invite_member_text">Lass %1$s das mit der Handykamera scannen. Der Code funktioniert einmal und enthält den Schlüssel der Gruppe, zeig ihn also nur dieser Person.</string>
+    <string name="invite_member_text">Lass %1$s das mit der Handykamera scannen. Der Code funktioniert einmal, und wer ihn zuerst scannt, tritt der Gruppe bei. Zeig ihn also nur dieser Person.</string>
     <string name="device_invite_text">Scanne das auf dem anderen Gerät. Es tritt als %1$s bei: Es sieht die Gruppe und schreibt als %1$s. Der Code funktioniert einmal, zeig ihn also nur der Person, die du meinst.</string>
     <string name="invite_qr_code">QR-Code der Einladung</string>
     <string name="share">Teilen</string>
@@ -287,12 +287,15 @@
     <string name="device_removed_title">Dieses Gerät wurde entfernt</string>
     <string name="device_removed_text">Es hat keinen Zugriff mehr auf %1$s. Um zurückzukommen, bitte den Admin oder eins deiner anderen Geräte um eine neue Einladung.</string>
     <string name="recovery_replaced_by">Wiederherstellungs-Kit ersetzt von %1$s</string>
+    <string name="keys_renewed_by">Schlüssel erneuert von %1$s</string>
     <string name="device_removed_by">Gerät entfernt von %1$s</string>
     <string name="restored_on_new_device">Auf einem neuen Gerät wiederhergestellt</string>
     <string name="reason_bad_recovery_sig">Wiederherstellungs-Kit passt nicht</string>
+    <string name="reason_stale_epoch">mit einem alten Schlüssel geschrieben</string>
     <string name="error_creation_code_used">Dieser Link zum Erstellen einer Gruppe wurde schon benutzt, zurückgezogen oder ist abgelaufen. Bitte den Server-Betreiber um einen neuen.</string>
     <string name="error_recovery_replaced">Dieses Wiederherstellungs-Kit funktioniert nicht mehr. Ein neueres hat es ersetzt, oder die Gruppe wurde gelöscht.</string>
     <string name="error_not_recoverable">Dieses Wiederherstellungs-Kit passt nicht zum Admin der Gruppe.</string>
+    <string name="error_no_epoch_secret">Dieses Gerät hat den aktuellen Schlüssel der Gruppe nicht. Bitte den Admin oder eins deiner anderen Geräte um eine neue Einladung.</string>
     <string name="not_an_app_link">Dieser Link ist keine gültige Open-Balance-Einladung und kein Wiederherstellungs-Kit.</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d Änderung wartet</item>

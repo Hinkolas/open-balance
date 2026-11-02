@@ -155,7 +155,7 @@
     <string name="name">Name</string>
     <string name="add_member_footer">You\'ll get a QR code that lets only this person join, once.</string>
     <string name="invite_member_title">Invite %1$s</string>
-    <string name="invite_member_text">Let %1$s scan this with the phone camera. It works once and contains the group\'s key, so show it only to them.</string>
+    <string name="invite_member_text">Let %1$s scan this with the phone camera. It works once, and whoever scans it first joins the group, so show it only to them.</string>
     <string name="device_invite_text">Scan this on the other device. It joins as %1$s: it sees the group and writes as %1$s. It works once, so show it only to the person you mean.</string>
     <string name="invite_qr_code">Invite QR code</string>
     <string name="share">Share</string>
@@ -293,12 +293,15 @@
     <string name="device_removed_title">This device was removed</string>
     <string name="device_removed_text">It no longer has access to %1$s. To come back, ask the admin or one of your other devices for a new invite.</string>
     <string name="recovery_replaced_by">Recovery kit replaced by %1$s</string>
+    <string name="keys_renewed_by">Keys renewed by %1$s</string>
     <string name="device_removed_by">Device removed by %1$s</string>
     <string name="restored_on_new_device">Restored on a new device</string>
     <string name="reason_bad_recovery_sig">recovery kit doesn\'t match</string>
+    <string name="reason_stale_epoch">written with an old key</string>
     <string name="error_creation_code_used">This link to create a group has been used, withdrawn or has expired. Ask the server owner for a new one.</string>
     <string name="error_recovery_replaced">This recovery kit no longer works. A newer one replaced it, or the group was deleted.</string>
     <string name="error_not_recoverable">This recovery kit doesn\'t match the group\'s admin.</string>
+    <string name="error_no_epoch_secret">This device doesn\'t have the group\'s current key. Ask the admin or one of your other devices for a new invite.</string>
     <string name="not_an_app_link">This link is not a valid Open Balance invite or recovery kit.</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d change waiting</item>

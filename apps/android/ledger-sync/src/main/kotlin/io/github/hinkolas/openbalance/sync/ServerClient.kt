@@ -49,11 +49,12 @@ class ServerClient(base: String, private val http: OkHttpClient = defaultHttp) {
     suspend fun info(): ServerInfo = json.decodeFromJsonElement(ServerInfo.serializer(), send("GET", "/v1/info", Auth.None))
 
     /** [token] is the server's ADMIN_TOKEN or a creation code (PROTOCOL.md §5.3). */
-    suspend fun createGroup(token: String, groupId: UUID, adminKey: ByteArray, recoveryKey: ByteArray) {
+    suspend fun createGroup(token: String, groupId: UUID, adminKey: ByteArray, recoveryKey: ByteArray, recoveryKeyring: ByteArray) {
         send("POST", "/v1/groups", Auth.Owner(token), buildJsonObject {
             put("groupId", groupId.lower)
             put("adminKey", adminKey.base64Url)
             put("recoveryKey", recoveryKey.base64Url)
+            put("recoveryKeyring", recoveryKeyring.base64Url)
         })
     }
 
@@ -75,29 +76,40 @@ class ServerClient(base: String, private val http: OkHttpClient = defaultHttp) {
     }
 
     /** Replace the group's recovery key (admin only). */
-    suspend fun replaceRecovery(signer: SigningKey, groupId: UUID, recoveryKey: ByteArray) {
+    suspend fun replaceRecovery(signer: SigningKey, groupId: UUID, recoveryKey: ByteArray, keyring: ByteArray) {
         send("PUT", "/v1/groups/${groupId.lower}/recovery", Auth.Key(signer), buildJsonObject {
             put("recoveryKey", recoveryKey.base64Url)
+            put("keyring", keyring.base64Url)
         })
     }
 
-    /** Register [member] as the admin's only device, signed with the [recovery] key. */
-    suspend fun recover(recovery: SigningKey, member: SigningKey, groupId: UUID) {
+    /** Register [member] as the admin's only device, signed with the [recovery] key. Returns its sealed keyring. */
+    suspend fun recover(recovery: SigningKey, member: SigningKey, groupId: UUID): ByteArray {
         val proof = member.sign(LedgerCrypto.claimInput(groupId, recovery.publicKey))
-        send("POST", "/v1/groups/${groupId.lower}/recover", Auth.Key(recovery), buildJsonObject {
+        return keyringOf(send("POST", "/v1/groups/${groupId.lower}/recover", Auth.Key(recovery), buildJsonObject {
             put("memberKey", member.publicKey.base64Url)
             put("proof", proof.base64Url)
-        })
+        }))
+    }
+
+    /** The keyring this key got with its claim or recovery, for a retry after a lost response. */
+    suspend fun keyring(signer: SigningKey, groupId: UUID): ByteArray =
+        keyringOf(send("GET", "/v1/groups/${groupId.lower}/keyring", Auth.Key(signer)))
+
+    private fun keyringOf(out: JsonElement): ByteArray {
+        val text = ((out as? JsonObject)?.get("keyring") as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        return text?.let(Base64Url::decode) ?: throw ServerError(0, "bad_keyring", "Server sent an invalid keyring")
     }
 
     /**
      * [role] is what the claimed key gets on the server: `member`, or `admin`
      * for the admin's own further devices (PROTOCOL.md §5.3).
      */
-    suspend fun createInvite(signer: SigningKey, groupId: UUID, inviteKey: ByteArray, role: String = "member") {
+    suspend fun createInvite(signer: SigningKey, groupId: UUID, inviteKey: ByteArray, keyring: ByteArray, role: String = "member") {
         send("POST", "/v1/groups/${groupId.lower}/invites", Auth.Key(signer), buildJsonObject {
             put("inviteKey", inviteKey.base64Url)
             put("role", role)
+            put("keyring", keyring.base64Url)
         })
     }
 
@@ -105,13 +117,13 @@ class ServerClient(base: String, private val http: OkHttpClient = defaultHttp) {
         send("DELETE", "/v1/groups/${groupId.lower}/invites/${inviteKey.base64Url}", Auth.Key(signer))
     }
 
-    /** Register [member] using the one-time [invite] key. */
-    suspend fun claim(invite: SigningKey, member: SigningKey, groupId: UUID) {
+    /** Register [member] using the one-time [invite] key. Returns the invite's sealed keyring. */
+    suspend fun claim(invite: SigningKey, member: SigningKey, groupId: UUID): ByteArray {
         val proof = member.sign(LedgerCrypto.claimInput(groupId, invite.publicKey))
-        send("POST", "/v1/groups/${groupId.lower}/claim", Auth.Key(invite), buildJsonObject {
+        return keyringOf(send("POST", "/v1/groups/${groupId.lower}/claim", Auth.Key(invite), buildJsonObject {
             put("memberKey", member.publicKey.base64Url)
             put("proof", proof.base64Url)
-        })
+        }))
     }
 
     @Serializable

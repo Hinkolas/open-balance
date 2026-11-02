@@ -35,24 +35,47 @@ class CryptoVectorTests {
         val v = vectors("crypto.json")
         val keys = v.getValue("keys").jsonObject
         val group = Uuids.parse(keys.s("groupId"))!!
-        val key = LedgerCrypto.encKey(b(keys.s("groupSecret")), group)
-        assertContentEquals(b(keys.s("encKey")), key)
+        val secrets = keys.getValue("epochSecrets").jsonArray.map { b(it.jsonPrimitive.content) }
+        val encKeys = secrets.mapIndexed { i, sec -> LedgerCrypto.encKey(sec, group, i.toLong()) }
+        val expected = keys.getValue("encKeys").jsonArray.map { b(it.jsonPrimitive.content) }
+        assertEquals(expected.size, encKeys.size)
+        for (i in encKeys.indices) assertContentEquals(expected[i], encKeys[i], "encKey $i")
 
         for (who in listOf("admin", "member", "invite", "recovery")) {
             val kp = keys.getValue(who).jsonObject
             assertContentEquals(b(kp.s("publicKey")), SigningKey(b(kp.s("seed"))).publicKey, who)
+            val box = LedgerCrypto.boxKey(b(kp.s("seed")))
+            assertContentEquals(b(kp.s("boxPrivate")), box.privateBytes, "$who box private")
+            assertContentEquals(b(kp.s("boxPublic")), box.publicKey, "$who box public")
         }
+
+        for (c in v.getValue("seals").jsonArray.map { it.jsonObject }) {
+            val to = keys.getValue(c.s("to")).jsonObject
+            val e = BoxKey(b(c.s("ephemeralPrivate")))
+            assertContentEquals(b(c.s("sealed")), LedgerCrypto.seal(b(c.s("plaintext")), b(to.s("boxPublic")), c.s("label"), group, e), c.s("to"))
+            val box = LedgerCrypto.boxKey(b(to.s("seed")))
+            assertContentEquals(b(c.s("plaintext")), LedgerCrypto.open(b(c.s("sealed")), box, c.s("label"), group))
+            assertFailsWith<LedgerCrypto.Failure> { LedgerCrypto.open(b(c.s("sealed")), box, "other", group) }
+        }
+        val ring = v.getValue("seals").jsonArray.map { it.jsonObject }.first { it.s("label") == LedgerCrypto.LABEL_KEYRING }
+        val opened = Epochs.openKeyring(b(ring.s("sealed")), LedgerCrypto.boxKey(b(keys.getValue("invite").jsonObject.s("seed"))), group)
+        assertEquals(secrets.map { it.toList() }, opened.map { it.toList() })
+        assertFailsWith<LedgerCrypto.Failure> { BoxKey.generate().agree(ByteArray(32)) }
 
         var chain = LedgerCrypto.chainZero
         for (e in v.getValue("events").jsonArray.map { it.jsonObject }) {
             val id = Uuids.parse(e.s("id"))!!
             val blob = b(e.s("blob"))
+            val epoch = e.l("epoch")
+            assertEquals(epoch, LedgerCrypto.blobEpoch(blob))
+            val key = encKeys[epoch.toInt()]
             val opened = LedgerCrypto.open(blob, group, id, key)
             assertEquals(e.s("body"), opened.body.decodeToString())
             assertContentEquals(b(e.s("signature")), opened.signature)
             assertTrue(LedgerCrypto.verify(opened.signature, opened.body, group, id, b(e.s("authorPublicKey"))))
             // Same nonce and signature → same blob: our envelope matches byte for byte.
-            assertContentEquals(blob, LedgerCrypto.sealSigned(opened.body, opened.signature, group, id, key, b(e.s("nonce"))))
+            assertContentEquals(blob, LedgerCrypto.sealSigned(opened.body, opened.signature, group, id, epoch, key, b(e.s("nonce"))))
+            assertFailsWith<LedgerCrypto.Failure> { LedgerCrypto.open(blob, group, id, encKeys[1 - epoch.toInt()]) }
             // Ed25519 in BouncyCastle is deterministic (RFC 8032), so our signature matches too.
             assertContentEquals(opened.signature, SigningKey(b(keys.getValue("admin").jsonObject.s("seed"))).sign(LedgerCrypto.eventSigningInput(group, id, opened.body)))
             chain = LedgerCrypto.chainNext(chain, e.l("seq"), id, blob)

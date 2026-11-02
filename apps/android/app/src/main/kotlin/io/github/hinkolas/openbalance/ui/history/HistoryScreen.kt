@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -101,7 +102,7 @@ enum class HistoryFilter(val label: Int, val icon: ImageVector, val empty: Int) 
             is EventData.GroupCreated, is EventData.GroupUpdated, is EventData.MemberAdded, is EventData.MemberInviteRenewed,
             is EventData.MemberClaimed, is EventData.MemberUpdated, is EventData.MemberDeviceInvited,
             is EventData.MemberDeviceClaimed, is EventData.MemberDeviceInviteRevoked, is EventData.GroupRecoveryChanged,
-            is EventData.MemberDeviceRemoved, is EventData.MemberRecovered -> true
+            is EventData.MemberDeviceRemoved, is EventData.MemberRecovered, is EventData.GroupEpochStarted -> true
             else -> false
         }
     }
@@ -267,6 +268,9 @@ private fun entry(res: Resources, ui: GroupUi, item: HistoryItem, c: HistoryColo
         is EventData.MemberDeviceInviteRevoked -> HistoryEntry(member(d.data.id), Icons.Outlined.Close, c.negative, ui.memberName(d.data.id), s(R.string.device_qr_revoked_by, by))
         is EventData.GroupRecoveryChanged -> HistoryEntry(
             EventSubject.Symbol(Icons.Outlined.Groups), Icons.Outlined.Key, c.neutral, ui.state.name, s(R.string.recovery_replaced_by, by),
+        )
+        is EventData.GroupEpochStarted -> HistoryEntry(
+            EventSubject.Symbol(Icons.Outlined.Groups), Icons.Outlined.LockReset, c.neutral, ui.state.name, s(R.string.keys_renewed_by, by),
         )
         is EventData.MemberDeviceRemoved -> HistoryEntry(member(d.data.id), Icons.Outlined.Close, c.negative, ui.memberName(d.data.id), s(R.string.device_removed_by, by))
         is EventData.MemberRecovered -> HistoryEntry(member(d.data.id), Icons.Outlined.PhoneAndroid, c.positive, ui.memberName(d.data.id), s(R.string.restored_on_new_device))

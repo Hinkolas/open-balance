@@ -121,6 +121,7 @@ fun Resources.errorText(e: Throwable): String = when (e) {
             FlowError.Kind.CreationCodeUsed -> R.string.error_creation_code_used
             FlowError.Kind.RecoveryReplaced -> R.string.error_recovery_replaced
             FlowError.Kind.NotRecoverable -> R.string.error_not_recoverable
+            FlowError.Kind.NoEpochSecret -> R.string.error_no_epoch_secret
         },
     )
     is ServerError -> getString(R.string.error_server, e.message, e.status)
@@ -148,6 +149,7 @@ fun Resources.reasonText(r: Rejection): String = getString(
         Rejection.AlreadyClaimed -> R.string.reason_already_claimed
         Rejection.BadInviteSig -> R.string.reason_bad_invite_sig
         Rejection.BadRecoverySig -> R.string.reason_bad_recovery_sig
+        Rejection.StaleEpoch -> R.string.reason_stale_epoch
     },
 )
 

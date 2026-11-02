@@ -9,30 +9,29 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 
-/** `openbalance://join?v=1&s=<server>&g=<group>&m=<member>#k=<secret>&i=<invite seed>` (PROTOCOL.md §4). */
+/**
+ * `openbalance://join?v=1&s=<server>&g=<group>&m=<member>#i=<invite seed>` (PROTOCOL.md §4.1).
+ * It holds no group secret: the server releases the invite's sealed keyring on claim.
+ */
 class InviteLink(
     val server: String,
     val groupId: UUID,
     val memberId: MemberId,
-    secret: ByteArray,
     inviteSeed: ByteArray,
 ) {
-    private val secretBytes = secret.copyOf()
     private val seedBytes = inviteSeed.copyOf()
-    val secret: ByteArray get() = secretBytes.copyOf()
     val inviteSeed: ByteArray get() = seedBytes.copyOf()
 
-    /** Secrets sit in the fragment so a link pasted into a browser never sends them anywhere. */
+    /** The seed sits in the fragment so a link pasted into a browser never sends it anywhere. */
     val url: String
-        get() = "openbalance://join?v=1&s=${encode(server)}&g=${groupId.lower}&m=$memberId" +
-            "#k=${secretBytes.base64Url}&i=${seedBytes.base64Url}"
+        get() = "openbalance://join?v=1&s=${encode(server)}&g=${groupId.lower}&m=$memberId#i=${seedBytes.base64Url}"
 
     /** Identifies the seat, not the secrets: safe for keys in UI state. */
     val id: String get() = groupId.lower + memberId
 
     override fun equals(other: Any?): Boolean =
         other is InviteLink && server == other.server && groupId == other.groupId && memberId == other.memberId &&
-            secretBytes.contentEquals(other.secretBytes) && seedBytes.contentEquals(other.seedBytes)
+            seedBytes.contentEquals(other.seedBytes)
 
     override fun hashCode(): Int = id.hashCode()
 
@@ -58,9 +57,8 @@ class InviteLink(
             if (url.scheme != "https" && url.scheme != "http") return null
             val group = q("g")?.let(Uuids::parse) ?: return null
             val m = q("m")?.takeIf { Uuids.parse(it) != null } ?: return null
-            val k = fr("k")?.let(Base64Url::decode)?.takeIf { it.size == 32 } ?: return null
             val i = fr("i")?.let(Base64Url::decode)?.takeIf { it.size == 32 } ?: return null
-            return InviteLink(s, group, m.lowercase(), k, i)
+            return InviteLink(s, group, m.lowercase(), i)
         }
 
         internal fun pairs(text: String): List<Pair<String, String?>>? =

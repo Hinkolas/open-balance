@@ -24,6 +24,7 @@ enum class Rejection(val code: String) {
     AlreadyClaimed("already_claimed"),
     BadInviteSig("bad_invite_sig"),
     BadRecoverySig("bad_recovery_sig"),
+    StaleEpoch("stale_epoch"),
 }
 
 /** Why the server's history can't be trusted (§6.4, §7.1). The app words it. */
@@ -111,8 +112,22 @@ class LedgerState(val groupId: UUID) {
         internal set
     var adminId: MemberId? = null
         internal set
-    /** The current public recovery key (§3.4). */
+    /** The current public recovery key (§3.4) and its box key (§3.5). */
     var recoveryKey: Bytes? = null
+        internal set
+    var recoveryBoxKey: Bytes? = null
+        internal set
+    /** The current epoch (§7.2), unsigned 32-bit. */
+    var epoch: Long = 0
+        internal set
+    /**
+     * A device was removed, the admin recovered or the recovery key changed
+     * since the last epoch started: a new epoch is due, ideally started by
+     * [epochDueBy] (§5.4 step 10).
+     */
+    var epochDue: Boolean = false
+        internal set
+    var epochDueBy: MemberId? = null
         internal set
     /** Set when the server's history can't be trusted (§6.4) or seq 1 is not a valid group.created. */
     var inconsistency: Inconsistency? = null
@@ -133,6 +148,8 @@ class LedgerState(val groupId: UUID) {
     internal val removedKeysMut = HashSet<Bytes>()
     /** When each member key joined, as the writer's `at` (display only). */
     internal val keyAddedAtMut = HashMap<Bytes, String>()
+    /** The box key of every member and invite key (§3.5). */
+    internal val boxKeysMut = HashMap<Bytes, Bytes>()
 
     val members: Map<MemberId, Member> get() = membersMut
     val memberOrder: List<MemberId> get() = memberOrderMut
@@ -145,6 +162,21 @@ class LedgerState(val groupId: UUID) {
     val usedKeys: Set<Bytes> get() = usedKeysMut
     val removedKeys: Set<Bytes> get() = removedKeysMut
     val keyAddedAt: Map<Bytes, String> get() = keyAddedAtMut
+    val boxKeys: Map<Bytes, Bytes> get() = boxKeysMut
+
+    /** The box keys a new epoch's secret is sealed to (§7.2). */
+    val readers: Set<Bytes>
+        get() {
+            val keys = ArrayList<Bytes>()
+            for (m in membersMut.values) {
+                keys += m.keys
+                if (!m.isClaimed) m.inviteKey?.let { keys += it }
+                keys += m.deviceInvites
+            }
+            val out = keys.mapNotNull { boxKeysMut[it] }.toHashSet()
+            recoveryBoxKey?.let { out += it }
+            return out
+        }
 
     val lastSeq: Long get() = (chainsMut.size - 1).toLong()
     val head: EventHeader.Seen get() = EventHeader.Seen(lastSeq, chainsMut.last().base64Url)
@@ -164,6 +196,10 @@ class LedgerState(val groupId: UUID) {
         s.currency = currency
         s.adminId = adminId
         s.recoveryKey = recoveryKey
+        s.recoveryBoxKey = recoveryBoxKey
+        s.epoch = epoch
+        s.epochDue = epochDue
+        s.epochDueBy = epochDueBy
         s.inconsistency = inconsistency
         s.membersMut.putAll(membersMut)
         s.memberOrderMut.addAll(memberOrderMut)
@@ -177,27 +213,57 @@ class LedgerState(val groupId: UUID) {
         s.usedKeysMut.addAll(usedKeysMut)
         s.removedKeysMut.addAll(removedKeysMut)
         s.keyAddedAtMut.putAll(keyAddedAtMut)
+        s.boxKeysMut.putAll(boxKeysMut)
         return s
     }
 
     private fun fields(): List<Any?> = listOf(
-        groupId, name, currency, adminId, recoveryKey, inconsistency, membersMut, memberOrderMut, paymentsMut,
-        paymentOrderMut, arrivalsMut, historyMut, chainsMut, seenIdsMut, usedKeysMut, removedKeysMut, keyAddedAtMut,
+        groupId, name, currency, adminId, recoveryKey, recoveryBoxKey, epoch, epochDue, epochDueBy, inconsistency,
+        membersMut, memberOrderMut, paymentsMut, paymentOrderMut, arrivalsMut, historyMut, chainsMut, seenIdsMut,
+        usedKeysMut, removedKeysMut, keyAddedAtMut, boxKeysMut,
     )
 
     override fun equals(other: Any?): Boolean = other is LedgerState && fields() == other.fields()
     override fun hashCode(): Int = fields().hashCode()
 }
 
-/** Replays events into a [LedgerState] (§8). */
-class Ledger private constructor(val groupId: UUID, private val encKey: ByteArray, state: LedgerState) {
-    constructor(groupId: UUID, secret: ByteArray) : this(groupId, LedgerCrypto.encKey(secret, groupId), LedgerState(groupId))
+/**
+ * Replays events into a [LedgerState] (§8). [boxes] are this reader's box
+ * keys: its device, and while joining or recovering the invite or recovery key.
+ */
+class Ledger private constructor(
+    val groupId: UUID,
+    private val secretsMut: ArrayList<ByteArray>,
+    private val encKeys: ArrayList<ByteArray>,
+    private val boxes: List<BoxKey>,
+    state: LedgerState,
+) {
+    constructor(groupId: UUID, secrets: List<ByteArray>, boxes: List<BoxKey> = emptyList()) :
+        this(groupId, ArrayList(), ArrayList(), boxes, LedgerState(groupId)) {
+        for (s in secrets) addSecret(s)
+    }
+
+    constructor(groupId: UUID, secret: ByteArray) : this(groupId, listOf(secret))
 
     var state: LedgerState = state
         private set
 
+    /**
+     * The epoch secrets this reader has, by epoch: the ones it started with
+     * and the ones it found sealed to its box keys.
+     */
+    val secrets: List<ByteArray> get() = secretsMut.map { it.copyOf() }
+
+    /** The secret of the current epoch, if this reader has it. */
+    val currentSecret: ByteArray? get() = secretsMut.getOrNull(state.epoch.toInt())?.copyOf()
+
+    private fun addSecret(secret: ByteArray) {
+        encKeys.add(LedgerCrypto.encKey(secret, groupId, secretsMut.size.toLong()))
+        secretsMut.add(secret.copyOf())
+    }
+
     /** An independent copy, e.g. to layer unconfirmed events on top. */
-    fun copy(): Ledger = Ledger(groupId, encKey, state.snapshot())
+    fun copy(): Ledger = Ledger(groupId, ArrayList(secretsMut), ArrayList(encKeys), boxes, state.snapshot())
 
     /** Apply server events in order. Stops at the first inconsistency. */
     fun apply(events: List<RawEvent>) {
@@ -221,8 +287,10 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 item = item.copy(rejection = Rejection.DuplicateId)
                 return
             }
+            val epoch = LedgerCrypto.blobEpoch(e.blob)
             val opened = try {
-                LedgerCrypto.open(e.blob, groupId, e.id, encKey)
+                if (epoch == null || epoch >= encKeys.size) throw LedgerCrypto.Failure("no secret for this epoch")
+                LedgerCrypto.open(e.blob, groupId, e.id, encKeys[epoch.toInt()])
             } catch (_: Exception) {
                 item = item.copy(rejection = Rejection.Decrypt)
                 return genesisCheck(e.seq, valid = false)
@@ -251,6 +319,10 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
             }
             if (keys.none { LedgerCrypto.verify(opened.signature, opened.body, groupId, e.id, it.toByteArray()) }) {
                 item = item.copy(rejection = Rejection.BadSignature)
+                return genesisCheck(e.seq, valid = false)
+            }
+            if (epoch != s.epoch) {
+                item = item.copy(rejection = Rejection.StaleEpoch)
                 return genesisCheck(e.seq, valid = false)
             }
             val rejection = validateAndApply(header, data, e.id, e.seq)
@@ -299,19 +371,23 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
             is EventData.GroupCreated -> {
                 val d = data.data
                 if (!(seq == 1L || (seq == null && !s.isCreated))) return Rejection.Misplaced
-                val key = Bytes.ofBase64Url(d.admin.key)
-                val recovery = Bytes.ofBase64Url(d.recoveryKey)
+                val key = key32(d.admin.key)
+                val box = key32(d.admin.boxKey)
+                val recovery = key32(d.recoveryKey)
+                val recoveryBox = key32(d.recoveryBoxKey)
                 if (h.author != d.admin.id || !validName(d.name) || !validName(d.admin.name) ||
-                    !Currency.isValidCode(d.currency) || key == null || key.size != 32 ||
-                    recovery == null || recovery.size != 32 || recovery == key
+                    !Currency.isValidCode(d.currency) || key == null || box == null || recovery == null || recoveryBox == null ||
+                    setOf(key, box, recovery, recoveryBox).size != 4
                 ) return Rejection.InvalidData
                 s.name = d.name
                 s.currency = d.currency
                 s.adminId = d.admin.id
                 s.recoveryKey = recovery
+                s.recoveryBoxKey = recoveryBox
                 use(recovery)
+                use(recoveryBox)
                 addMember(Member(id = d.admin.id, name = d.admin.name, isAdmin = true))
-                addKey(key, d.admin.id, h.at)
+                addKey(key, box, d.admin.id, h.at)
             }
 
             is EventData.GroupUpdated -> {
@@ -322,20 +398,41 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
 
             is EventData.GroupRecoveryChanged -> {
                 if (!isAdmin) return Rejection.Forbidden
-                val key = Bytes.ofBase64Url(data.data.recoveryKey)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(data.data.recoveryKey)
+                val box = newKey(data.data.recoveryBoxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 s.recoveryKey = key
+                s.recoveryBoxKey = box
                 use(key)
+                use(box)
+                markEpochDue(h.author)
+            }
+
+            is EventData.GroupEpochStarted -> {
+                val d = data.data
+                if (s.epoch >= 0xFFFFFFFFL || d.epoch != s.epoch + 1) return Rejection.InvalidData
+                val entries = HashMap<Bytes, ByteArray>()
+                for (entry in d.keys) {
+                    val key = key32(entry.key) ?: return Rejection.InvalidData
+                    val sealed = Base64Url.decode(entry.secret)
+                    if (sealed == null || sealed.size != 84 || entries.put(key, sealed) != null) return Rejection.InvalidData
+                }
+                if (entries.keys != s.readers) return Rejection.InvalidData
+                s.epoch = d.epoch
+                s.epochDue = false
+                s.epochDueBy = null
+                if (secretsMut.size.toLong() == d.epoch) unseal(d.epoch, entries)
             }
 
             is EventData.MemberAdded -> {
                 val d = data.data
                 if (!isAdmin) return Rejection.Forbidden
                 if (s.membersMut[d.id] != null) return Rejection.DuplicateId
-                val key = Bytes.ofBase64Url(d.inviteKey)
-                if (!validName(d.name) || key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.inviteKey)
+                val box = newKey(d.inviteBoxKey)
+                if (!validName(d.name) || key == null || box == null || key == box) return Rejection.InvalidData
                 addMember(Member(id = d.id, name = d.name, inviteKey = key, isAdmin = false))
-                use(key)
+                addInvite(key, box)
             }
 
             is EventData.MemberInviteRenewed -> {
@@ -343,10 +440,11 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 if (!isAdmin) return Rejection.Forbidden
                 val m = s.membersMut[d.id] ?: return Rejection.UnknownTarget
                 if (m.isClaimed) return Rejection.AlreadyClaimed
-                val key = Bytes.ofBase64Url(d.inviteKey)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.inviteKey)
+                val box = newKey(d.inviteBoxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 s.membersMut[d.id] = m.copy(inviteKey = key)
-                use(key)
+                addInvite(key, box)
             }
 
             is EventData.MemberClaimed -> {
@@ -354,12 +452,13 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val m = s.membersMut[d.id] ?: return Rejection.UnknownTarget
                 if (h.author != d.id) return Rejection.Forbidden
                 if (m.isClaimed) return Rejection.AlreadyClaimed
-                val key = Bytes.ofBase64Url(d.key)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.key)
+                val box = newKey(d.boxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 val invite = m.inviteKey
                 if (invite == null || !inviteSigned(d.inviteSig, invite, key)) return Rejection.BadInviteSig
                 s.membersMut[d.id] = m.copy(inviteKey = null)
-                addKey(key, d.id, h.at)
+                addKey(key, box, d.id, h.at)
             }
 
             is EventData.MemberUpdated -> {
@@ -375,22 +474,24 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 val d = data.data
                 val m = s.membersMut[d.id] ?: return Rejection.UnknownTarget
                 if (h.author != d.id) return Rejection.Forbidden
-                val key = Bytes.ofBase64Url(d.inviteKey)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.inviteKey)
+                val box = newKey(d.inviteBoxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 s.membersMut[d.id] = m.copy(deviceInvites = m.deviceInvites + key)
-                use(key)
+                addInvite(key, box)
             }
 
             is EventData.MemberDeviceClaimed -> {
                 val d = data.data
                 val m = s.membersMut[d.id] ?: return Rejection.UnknownTarget
                 if (h.author != d.id) return Rejection.Forbidden
-                val key = Bytes.ofBase64Url(d.key)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.key)
+                val box = newKey(d.boxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 val invite = Bytes.ofBase64Url(d.inviteKey)
                 if (invite == null || invite !in m.deviceInvites || !inviteSigned(d.inviteSig, invite, key)) return Rejection.BadInviteSig
                 s.membersMut[d.id] = m.copy(deviceInvites = m.deviceInvites.filter { it != invite })
-                addKey(key, d.id, h.at)
+                addKey(key, box, d.id, h.at)
             }
 
             is EventData.MemberDeviceInviteRevoked -> {
@@ -412,19 +513,22 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
                 s.removedKeysMut.add(key)
                 // Unclaimed again: the admin renews its invite for a new first device.
                 s.membersMut[d.id] = if (keys.isEmpty()) m.copy(keys = keys, inviteKey = null, deviceInvites = emptyList()) else m.copy(keys = keys)
+                markEpochDue(h.author)
             }
 
             is EventData.MemberRecovered -> {
                 val d = data.data
                 if (d.id != s.adminId || h.author != d.id) return Rejection.Forbidden
-                val key = Bytes.ofBase64Url(d.key)
-                if (key == null || key.size != 32 || keyInUse(key)) return Rejection.InvalidData
+                val key = newKey(d.key)
+                val box = newKey(d.boxKey)
+                if (key == null || box == null || key == box) return Rejection.InvalidData
                 val recovery = s.recoveryKey
                 if (recovery == null || !signed(d.recoverySig, recovery, LedgerCrypto.recoverInput(groupId, key.toByteArray()))) return Rejection.BadRecoverySig
                 val m = s.membersMut.getValue(d.id)
                 s.removedKeysMut.addAll(m.keys)
                 s.membersMut[d.id] = m.copy(keys = emptyList(), deviceInvites = emptyList())
-                addKey(key, d.id, h.at)
+                addKey(key, box, d.id, h.at)
+                markEpochDue(h.author)
             }
 
             is EventData.PaymentCreated -> {
@@ -488,11 +592,45 @@ class Ledger private constructor(val groupId: UUID, private val encKey: ByteArra
         state.usedKeysMut.add(key)
     }
 
-    private fun addKey(key: Bytes, member: MemberId, at: String) {
+    /** A 32-byte key from base64url. */
+    private fun key32(text: String): Bytes? = Bytes.ofBase64Url(text)?.takeIf { it.size == 32 }
+
+    /** A 32-byte key the group hasn't seen yet. */
+    private fun newKey(text: String): Bytes? = key32(text)?.takeIf { !keyInUse(it) }
+
+    private fun addKey(key: Bytes, box: Bytes, member: MemberId, at: String) {
         val m = state.membersMut[member] ?: return
         state.membersMut[member] = m.copy(keys = m.keys + key)
         state.keyAddedAtMut[key] = at
+        state.boxKeysMut[key] = box
         use(key)
+        use(box)
+    }
+
+    private fun addInvite(key: Bytes, box: Bytes) {
+        state.boxKeysMut[key] = box
+        use(key)
+        use(box)
+    }
+
+    private fun markEpochDue(author: MemberId) {
+        state.epochDue = true
+        state.epochDueBy = author
+    }
+
+    /** Take the new epoch's secret from the entry sealed to one of our box keys. */
+    private fun unseal(epoch: Long, entries: Map<Bytes, ByteArray>) {
+        for (box in boxes) {
+            val sealed = entries[Bytes(box.publicKey)] ?: continue
+            val m = try {
+                LedgerCrypto.open(sealed, box, LedgerCrypto.LABEL_EPOCH, groupId)
+            } catch (_: Exception) {
+                continue
+            }
+            if (m.size != 36 || !m.copyOfRange(0, 4).contentEquals(LedgerCrypto.u32(epoch))) continue
+            addSecret(m.copyOfRange(4, 36))
+            return
+        }
     }
 
     /** `inviteSig` (§7.3): the invite key vouches for `key` in this group. */

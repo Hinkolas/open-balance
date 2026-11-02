@@ -9,7 +9,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.UUID
 
 /**
- * `openbalance://recover?v=1&s=<server>&g=<group>&m=<admin>#k=<secret>&r=<recovery seed>`
+ * `openbalance://recover?v=1&s=<server>&g=<group>&m=<admin>#r=<recovery seed>`
  * (PROTOCOL.md §4.2). The admin keeps it outside the app; it is as powerful
  * as the admin's devices.
  */
@@ -17,21 +17,17 @@ class RecoveryLink(
     val server: String,
     val groupId: UUID,
     val adminId: MemberId,
-    secret: ByteArray,
     recoverySeed: ByteArray,
 ) {
-    private val secretBytes = secret.copyOf()
     private val seedBytes = recoverySeed.copyOf()
-    val secret: ByteArray get() = secretBytes.copyOf()
     val recoverySeed: ByteArray get() = seedBytes.copyOf()
 
     val url: String
-        get() = "openbalance://recover?v=1&s=${InviteLink.encode(server)}&g=${groupId.lower}&m=$adminId" +
-            "#k=${secretBytes.base64Url}&r=${seedBytes.base64Url}"
+        get() = "openbalance://recover?v=1&s=${InviteLink.encode(server)}&g=${groupId.lower}&m=$adminId#r=${seedBytes.base64Url}"
 
     override fun equals(other: Any?): Boolean =
         other is RecoveryLink && server == other.server && groupId == other.groupId && adminId == other.adminId &&
-            secretBytes.contentEquals(other.secretBytes) && seedBytes.contentEquals(other.seedBytes)
+            seedBytes.contentEquals(other.seedBytes)
 
     override fun hashCode(): Int = groupId.hashCode()
 
@@ -44,9 +40,8 @@ class RecoveryLink(
             val s = LinkCoding.server(q["s"]) ?: return null
             val group = q["g"]?.let(Uuids::parse) ?: return null
             val m = q["m"]?.takeIf { Uuids.parse(it) != null } ?: return null
-            val k = LinkCoding.bytes32(f["k"]) ?: return null
             val r = LinkCoding.bytes32(f["r"]) ?: return null
-            return RecoveryLink(s, group, m.lowercase(), k, r)
+            return RecoveryLink(s, group, m.lowercase(), r)
         }
     }
 }

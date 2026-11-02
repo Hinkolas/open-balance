@@ -8,6 +8,8 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.HKDFParameters
 import org.bouncycastle.crypto.params.KeyParameter
+import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
+import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 import java.nio.ByteBuffer
 import java.security.MessageDigest
@@ -42,6 +44,41 @@ class SigningKey(seed: ByteArray) {
     }
 }
 
+/**
+ * An X25519 box key (§3.5): 32 private bytes, clamped as RFC 7748 says when
+ * used. Receives epoch secrets sealed to its public key.
+ */
+class BoxKey(privateBytes: ByteArray) {
+    init {
+        require(privateBytes.size == 32) { "X25519 private keys are 32 bytes" }
+    }
+
+    private val private = X25519PrivateKeyParameters(privateBytes, 0)
+
+    /** The bytes as given (not clamped), like CryptoKit's rawRepresentation. */
+    val privateBytes: ByteArray = privateBytes.copyOf()
+
+    /** 32 raw bytes. */
+    val publicKey: ByteArray = private.generatePublicKey().encoded
+
+    /** X25519 with [peer]. Throws on a low-order peer (all-zero result). */
+    fun agree(peer: ByteArray): ByteArray {
+        if (peer.size != 32) throw LedgerCrypto.Failure("bad box key")
+        val out = ByteArray(32)
+        try {
+            private.generateSecret(X25519PublicKeyParameters(peer, 0), out, 0)
+        } catch (e: Exception) {
+            throw LedgerCrypto.Failure("key agreement: ${e.message}")
+        }
+        if (out.all { it == 0.toByte() }) throw LedgerCrypto.Failure("all-zero shared secret")
+        return out
+    }
+
+    companion object {
+        fun generate(): BoxKey = BoxKey(randomBytes(32))
+    }
+}
+
 object Ed25519 {
     fun verify(publicKey: ByteArray, signature: ByteArray, message: ByteArray): Boolean {
         if (publicKey.size != 32 || signature.size != 64) return false
@@ -67,8 +104,12 @@ fun sha256(vararg parts: ByteArray): ByteArray {
  * (PROTOCOL.md §3, §5.1, §6). Mirrors internal/protocol in Go.
  */
 object LedgerCrypto {
-    const val BLOB_VERSION: Byte = 0x01
+    const val BLOB_VERSION: Byte = 0x02
     const val PAD_BLOCK = 256
+    /** Version, epoch and nonce (§6.1). */
+    const val BLOB_HEADER = 1 + 4 + 12
+    const val LABEL_EPOCH = "open-balance/v1/epoch"
+    const val LABEL_KEYRING = "open-balance/v1/keyring"
 
     private const val LABEL_ENC = "open-balance/v1/enc"
     private const val LABEL_EVENT = "open-balance/v1/event"
@@ -77,18 +118,33 @@ object LedgerCrypto {
     private const val LABEL_REQ = "open-balance/v1/req\n"
     private const val LABEL_CLAIM = "open-balance/v1/claim"
     private const val LABEL_RECOVER = "open-balance/v1/recover"
+    private const val LABEL_BOX = "open-balance/v1/box"
 
     class Failure(message: String) : Exception(message)
 
-    /** K_enc for a group (§3.1). */
-    fun encKey(secret: ByteArray, groupId: UUID): ByteArray {
+    /** K_e, the key of epoch [epoch] of a group (§3.1). */
+    fun encKey(secret: ByteArray, groupId: UUID, epoch: Long): ByteArray {
         if (secret.size != 32) throw Failure("bad secret")
-        val hkdf = HKDFBytesGenerator(SHA256Digest())
-        hkdf.init(HKDFParameters(secret, groupId.bytes, LABEL_ENC.toByteArray()))
-        return ByteArray(32).also { hkdf.generateBytes(it, 0, 32) }
+        return hkdf(secret, groupId.bytes, LABEL_ENC.toByteArray() + u32(epoch))
     }
 
-    fun aad(groupId: UUID, eventId: UUID): ByteArray = LABEL_EVENT.toByteArray() + groupId.bytes + eventId.bytes
+    private fun hkdf(ikm: ByteArray, salt: ByteArray?, info: ByteArray): ByteArray {
+        val g = HKDFBytesGenerator(SHA256Digest())
+        g.init(HKDFParameters(ikm, salt, info))
+        return ByteArray(32).also { g.generateBytes(it, 0, 32) }
+    }
+
+    /** u32be; epochs are unsigned 32-bit, kept in a Long. */
+    fun u32(v: Long): ByteArray = ByteBuffer.allocate(4).putInt(v.toInt()).array()
+
+    fun aad(groupId: UUID, eventId: UUID, epoch: Long): ByteArray =
+        LABEL_EVENT.toByteArray() + groupId.bytes + eventId.bytes + u32(epoch)
+
+    /** The epoch a blob was sealed with, null if it isn't a version 2 blob (§6.1). */
+    fun blobEpoch(blob: ByteArray): Long? {
+        if (blob.size < BLOB_HEADER + 16 || blob[0] != BLOB_VERSION) return null
+        return ByteBuffer.wrap(blob, 1, 4).int.toLong() and 0xFFFFFFFFL
+    }
 
     fun eventSigningInput(groupId: UUID, eventId: UUID, body: ByteArray): ByteArray =
         LABEL_SIG.toByteArray() + groupId.bytes + eventId.bytes + body
@@ -119,29 +175,32 @@ object LedgerCrypto {
         return out
     }
 
-    /** Sign the body with the author's key and encrypt it into a blob. */
+    /** Sign the body with the author's key and encrypt it into a blob of [epoch]; [key] is that epoch's K_e. */
     fun seal(
-        body: ByteArray, groupId: UUID, eventId: UUID, key: ByteArray, signer: SigningKey,
+        body: ByteArray, groupId: UUID, eventId: UUID, epoch: Long, key: ByteArray, signer: SigningKey,
         nonce: ByteArray = randomBytes(12),
     ): ByteArray {
         val signature = signer.sign(eventSigningInput(groupId, eventId, body))
-        return sealSigned(body, signature, groupId, eventId, key, nonce)
+        return sealSigned(body, signature, groupId, eventId, epoch, key, nonce)
     }
 
     /** Encrypt an already signed body. Split out so tests can match vectors byte for byte. */
-    fun sealSigned(body: ByteArray, signature: ByteArray, groupId: UUID, eventId: UUID, key: ByteArray, nonce: ByteArray): ByteArray {
-        val box = chachaSeal(key, nonce, plaintext(body, signature), aad(groupId, eventId))
-        return byteArrayOf(BLOB_VERSION) + nonce + box
+    fun sealSigned(body: ByteArray, signature: ByteArray, groupId: UUID, eventId: UUID, epoch: Long, key: ByteArray, nonce: ByteArray): ByteArray {
+        val box = chachaSeal(key, nonce, plaintext(body, signature), aad(groupId, eventId, epoch))
+        return byteArrayOf(BLOB_VERSION) + u32(epoch) + nonce + box
     }
 
     class Opened(val body: ByteArray, val signature: ByteArray)
 
-    /** Decrypt a blob. Does not verify the signature (the author's key comes from the ledger). */
+    /**
+     * Decrypt a blob with the key of its epoch (see [blobEpoch]). Does not
+     * verify the signature (the author's key comes from the ledger).
+     */
     fun open(blob: ByteArray, groupId: UUID, eventId: UUID, key: ByteArray): Opened {
-        if (blob.size < 1 + 12 + 16 || blob[0] != BLOB_VERSION) throw Failure("not a blob")
-        val nonce = blob.copyOfRange(1, 13)
+        val epoch = blobEpoch(blob) ?: throw Failure("not a blob")
+        val nonce = blob.copyOfRange(5, BLOB_HEADER)
         val p = try {
-            chachaOpen(key, nonce, blob.copyOfRange(13, blob.size), aad(groupId, eventId))
+            chachaOpen(key, nonce, blob.copyOfRange(BLOB_HEADER, blob.size), aad(groupId, eventId, epoch))
         } catch (e: Exception) {
             throw Failure("decrypt: ${e.message}")
         }
@@ -169,6 +228,36 @@ object LedgerCrypto {
 
     /** Signed by the recovery key for the admin's new device key (§3.4). */
     fun recoverInput(groupId: UUID, key: ByteArray): ByteArray = LABEL_RECOVER.toByteArray() + groupId.bytes + key
+
+    // MARK: - Box keys and sealing (§3.5)
+
+    /** The X25519 box key of a seed: a member key seed, an invite seed or the recovery seed. */
+    fun boxKey(seed: ByteArray): BoxKey {
+        if (seed.size != 32) throw Failure("bad seed")
+        return BoxKey(hkdf(seed, null, LABEL_BOX.toByteArray()))
+    }
+
+    /** Seal [message] to the box key [to] (32 raw bytes). */
+    fun seal(message: ByteArray, to: ByteArray, label: String, groupId: UUID, ephemeral: BoxKey = BoxKey.generate()): ByteArray {
+        val ePub = ephemeral.publicKey
+        val key = sealKey(ephemeral.agree(to), ePub, to, label, groupId)
+        return ePub + chachaSeal(key, ByteArray(12), message, ByteArray(0))
+    }
+
+    /** Open what [seal] sealed to [box]'s public key. */
+    fun open(sealed: ByteArray, box: BoxKey, label: String, groupId: UUID): ByteArray {
+        if (sealed.size < 32 + 16) throw Failure("sealed data too short")
+        val ePub = sealed.copyOfRange(0, 32)
+        val key = sealKey(box.agree(ePub), ePub, box.publicKey, label, groupId)
+        return try {
+            chachaOpen(key, ByteArray(12), sealed.copyOfRange(32, sealed.size), ByteArray(0))
+        } catch (e: Exception) {
+            throw Failure("open: ${e.message}")
+        }
+    }
+
+    private fun sealKey(z: ByteArray, ePub: ByteArray, to: ByteArray, label: String, groupId: UUID): ByteArray =
+        hkdf(z, groupId.bytes, label.toByteArray() + ePub + to)
 
     fun requestSigningInput(method: String, pathAndQuery: String, ts: Long, body: ByteArray): ByteArray =
         "$LABEL_REQ$method\n$pathAndQuery\n$ts\n${sha256(body).hex}".toByteArray()

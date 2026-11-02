@@ -48,6 +48,10 @@ sealed interface EventData {
         override val type get() = "group.recovery_changed"
     }
 
+    data class GroupEpochStarted(val data: GroupEpochStartedData) : EventData {
+        override val type get() = "group.epoch_started"
+    }
+
     data class MemberAdded(val data: MemberAddedData) : EventData {
         override val type get() = "member.added"
     }
@@ -64,7 +68,7 @@ sealed interface EventData {
         override val type get() = "member.updated"
     }
 
-    data class MemberDeviceInvited(val data: MemberDeviceInviteData) : EventData {
+    data class MemberDeviceInvited(val data: MemberDeviceInvitedData) : EventData {
         override val type get() = "member.device_invited"
     }
 
@@ -108,35 +112,44 @@ sealed interface EventData {
     data class Unsupported(override val type: String) : EventData
 }
 
-/** `recoveryKey` is the public recovery key (§3.4). */
-data class GroupCreatedData(val name: String, val currency: String, val admin: Admin, val recoveryKey: String) {
-    data class Admin(val id: MemberId, val name: String, val key: String)
+/** `recoveryKey` is the public recovery key (§3.4); the box keys are §3.5. */
+data class GroupCreatedData(val name: String, val currency: String, val admin: Admin, val recoveryKey: String, val recoveryBoxKey: String) {
+    data class Admin(val id: MemberId, val name: String, val key: String, val boxKey: String)
 }
 
 data class GroupUpdatedData(val name: String)
 
 /** `group.recovery_changed` (§7.2): a new recovery key replaces the current one. */
-data class GroupRecoveryChangedData(val recoveryKey: String)
+data class GroupRecoveryChangedData(val recoveryKey: String, val recoveryBoxKey: String)
 
-data class MemberAddedData(val id: MemberId, val name: String, val inviteKey: String)
+/** `group.epoch_started` (§7.2): the new epoch's secret, sealed to every reader. */
+data class GroupEpochStartedData(val epoch: Long, val keys: List<Entry>) {
+    /** [key] is the reader's box key; [secret] seal(key, "open-balance/v1/epoch", u32be(epoch) ‖ S_epoch). */
+    data class Entry(val key: String, val secret: String)
+}
 
-data class MemberInviteRenewedData(val id: MemberId, val inviteKey: String)
+data class MemberAddedData(val id: MemberId, val name: String, val inviteKey: String, val inviteBoxKey: String)
 
-data class MemberClaimedData(val id: MemberId, val key: String, val inviteSig: String)
+data class MemberInviteRenewedData(val id: MemberId, val inviteKey: String, val inviteBoxKey: String)
+
+data class MemberClaimedData(val id: MemberId, val key: String, val boxKey: String, val inviteSig: String)
 
 data class MemberUpdatedData(val id: MemberId, val name: String)
 
-/** `member.device_invited` and `member.device_invite_revoked` (§7.3). */
+/** `member.device_invited` (§7.3). */
+data class MemberDeviceInvitedData(val id: MemberId, val inviteKey: String, val inviteBoxKey: String)
+
+/** `member.device_invite_revoked` (§7.3). */
 data class MemberDeviceInviteData(val id: MemberId, val inviteKey: String)
 
 /** `member.device_claimed` (§7.3): one more key for a claimed member. */
-data class MemberDeviceClaimedData(val id: MemberId, val key: String, val inviteKey: String, val inviteSig: String)
+data class MemberDeviceClaimedData(val id: MemberId, val key: String, val boxKey: String, val inviteKey: String, val inviteSig: String)
 
 /** `member.device_removed` (§7.3): one of the member's keys stops counting. */
 data class MemberDeviceRemovedData(val id: MemberId, val key: String)
 
 /** `member.recovered` (§7.3): the recovery key hands the admin's seat to a new device. */
-data class MemberRecoveredData(val id: MemberId, val key: String, val recoverySig: String)
+data class MemberRecoveredData(val id: MemberId, val key: String, val boxKey: String, val recoverySig: String)
 
 /** A payment (§7.4). `inSide` is who received the money, `outSide` whom it belongs to. */
 data class Payment(
@@ -221,34 +234,56 @@ object EventCoding {
                 put("id", data.data.admin.id)
                 put("name", data.data.admin.name)
                 put("key", data.data.admin.key)
+                put("boxKey", data.data.admin.boxKey)
             })
             put("recoveryKey", data.data.recoveryKey)
+            put("recoveryBoxKey", data.data.recoveryBoxKey)
         }
         is EventData.GroupUpdated -> buildJsonObject { put("name", data.data.name) }
-        is EventData.GroupRecoveryChanged -> buildJsonObject { put("recoveryKey", data.data.recoveryKey) }
+        is EventData.GroupRecoveryChanged -> buildJsonObject {
+            put("recoveryKey", data.data.recoveryKey)
+            put("recoveryBoxKey", data.data.recoveryBoxKey)
+        }
+        is EventData.GroupEpochStarted -> buildJsonObject {
+            put("epoch", data.data.epoch)
+            put("keys", buildJsonArray {
+                for (e in data.data.keys) add(buildJsonObject {
+                    put("key", e.key)
+                    put("secret", e.secret)
+                })
+            })
+        }
         is EventData.MemberAdded -> buildJsonObject {
             put("id", data.data.id)
             put("name", data.data.name)
             put("inviteKey", data.data.inviteKey)
+            put("inviteBoxKey", data.data.inviteBoxKey)
         }
         is EventData.MemberInviteRenewed -> buildJsonObject {
             put("id", data.data.id)
             put("inviteKey", data.data.inviteKey)
+            put("inviteBoxKey", data.data.inviteBoxKey)
         }
         is EventData.MemberClaimed -> buildJsonObject {
             put("id", data.data.id)
             put("key", data.data.key)
+            put("boxKey", data.data.boxKey)
             put("inviteSig", data.data.inviteSig)
         }
         is EventData.MemberUpdated -> buildJsonObject {
             put("id", data.data.id)
             put("name", data.data.name)
         }
-        is EventData.MemberDeviceInvited -> deviceInvite(data.data)
+        is EventData.MemberDeviceInvited -> buildJsonObject {
+            put("id", data.data.id)
+            put("inviteKey", data.data.inviteKey)
+            put("inviteBoxKey", data.data.inviteBoxKey)
+        }
         is EventData.MemberDeviceInviteRevoked -> deviceInvite(data.data)
         is EventData.MemberDeviceClaimed -> buildJsonObject {
             put("id", data.data.id)
             put("key", data.data.key)
+            put("boxKey", data.data.boxKey)
             put("inviteKey", data.data.inviteKey)
             put("inviteSig", data.data.inviteSig)
         }
@@ -259,6 +294,7 @@ object EventCoding {
         is EventData.MemberRecovered -> buildJsonObject {
             put("id", data.data.id)
             put("key", data.data.key)
+            put("boxKey", data.data.boxKey)
             put("recoverySig", data.data.recoverySig)
         }
         is EventData.PaymentCreated -> encodePayment(data.payment)
@@ -335,22 +371,45 @@ object EventCoding {
             "group.created" -> root.obj("data").let { d ->
                 val a = d.obj("admin")
                 EventData.GroupCreated(
-                    GroupCreatedData(d.str("name"), d.str("currency"), GroupCreatedData.Admin(a.str("id"), a.str("name"), a.str("key")), d.str("recoveryKey")),
+                    GroupCreatedData(
+                        d.str("name"), d.str("currency"), GroupCreatedData.Admin(a.str("id"), a.str("name"), a.str("key"), a.str("boxKey")),
+                        d.str("recoveryKey"), d.str("recoveryBoxKey"),
+                    ),
                 )
             }
             "group.updated" -> EventData.GroupUpdated(GroupUpdatedData(root.obj("data").str("name")))
-            "group.recovery_changed" -> EventData.GroupRecoveryChanged(GroupRecoveryChangedData(root.obj("data").str("recoveryKey")))
-            "member.added" -> root.obj("data").let { EventData.MemberAdded(MemberAddedData(it.str("id"), it.str("name"), it.str("inviteKey"))) }
-            "member.invite_renewed" -> root.obj("data").let { EventData.MemberInviteRenewed(MemberInviteRenewedData(it.str("id"), it.str("inviteKey"))) }
-            "member.claimed" -> root.obj("data").let { EventData.MemberClaimed(MemberClaimedData(it.str("id"), it.str("key"), it.str("inviteSig"))) }
+            "group.recovery_changed" -> root.obj("data").let {
+                EventData.GroupRecoveryChanged(GroupRecoveryChangedData(it.str("recoveryKey"), it.str("recoveryBoxKey")))
+            }
+            "group.epoch_started" -> root.obj("data").let { d ->
+                EventData.GroupEpochStarted(
+                    GroupEpochStartedData(d.uint32("epoch"), d.arr("keys").map { e ->
+                        val o = e as? JsonObject ?: throw Malformed("keys entry")
+                        GroupEpochStartedData.Entry(o.str("key"), o.str("secret"))
+                    }),
+                )
+            }
+            "member.added" -> root.obj("data").let {
+                EventData.MemberAdded(MemberAddedData(it.str("id"), it.str("name"), it.str("inviteKey"), it.str("inviteBoxKey")))
+            }
+            "member.invite_renewed" -> root.obj("data").let {
+                EventData.MemberInviteRenewed(MemberInviteRenewedData(it.str("id"), it.str("inviteKey"), it.str("inviteBoxKey")))
+            }
+            "member.claimed" -> root.obj("data").let {
+                EventData.MemberClaimed(MemberClaimedData(it.str("id"), it.str("key"), it.str("boxKey"), it.str("inviteSig")))
+            }
             "member.updated" -> root.obj("data").let { EventData.MemberUpdated(MemberUpdatedData(it.str("id"), it.str("name"))) }
-            "member.device_invited" -> root.obj("data").let { EventData.MemberDeviceInvited(MemberDeviceInviteData(it.str("id"), it.str("inviteKey"))) }
+            "member.device_invited" -> root.obj("data").let {
+                EventData.MemberDeviceInvited(MemberDeviceInvitedData(it.str("id"), it.str("inviteKey"), it.str("inviteBoxKey")))
+            }
             "member.device_claimed" -> root.obj("data").let {
-                EventData.MemberDeviceClaimed(MemberDeviceClaimedData(it.str("id"), it.str("key"), it.str("inviteKey"), it.str("inviteSig")))
+                EventData.MemberDeviceClaimed(MemberDeviceClaimedData(it.str("id"), it.str("key"), it.str("boxKey"), it.str("inviteKey"), it.str("inviteSig")))
             }
             "member.device_invite_revoked" -> root.obj("data").let { EventData.MemberDeviceInviteRevoked(MemberDeviceInviteData(it.str("id"), it.str("inviteKey"))) }
             "member.device_removed" -> root.obj("data").let { EventData.MemberDeviceRemoved(MemberDeviceRemovedData(it.str("id"), it.str("key"))) }
-            "member.recovered" -> root.obj("data").let { EventData.MemberRecovered(MemberRecoveredData(it.str("id"), it.str("key"), it.str("recoverySig"))) }
+            "member.recovered" -> root.obj("data").let {
+                EventData.MemberRecovered(MemberRecoveredData(it.str("id"), it.str("key"), it.str("boxKey"), it.str("recoverySig")))
+            }
             "payment.created" -> EventData.PaymentCreated(decodePayment(root.obj("data")))
             "payment.updated" -> EventData.PaymentUpdated(decodePayment(root.obj("data")))
             "payment.deleted" -> EventData.PaymentDeleted(PaymentDeletedData(root.obj("data").str("id")))
@@ -398,6 +457,13 @@ object EventCoding {
     private fun JsonObject.str(name: String): String = string(field(name)) ?: throw Malformed("$name: string")
 
     private fun JsonObject.long(name: String): Long = number(field(name)) ?: throw Malformed("$name: integer")
+
+    /** Like Swift's `UInt32` Codable: 0 ... 2^32-1. */
+    private fun JsonObject.uint32(name: String): Long {
+        val v = long(name)
+        if (v < 0 || v > 0xFFFFFFFFL) throw Malformed("$name: uint32")
+        return v
+    }
 
     private fun JsonObject.int(name: String): Int {
         val v = long(name)

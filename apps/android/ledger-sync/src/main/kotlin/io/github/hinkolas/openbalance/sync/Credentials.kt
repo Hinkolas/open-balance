@@ -1,6 +1,8 @@
 package io.github.hinkolas.openbalance.sync
 
 import io.github.hinkolas.openbalance.core.Base64Url
+import io.github.hinkolas.openbalance.core.BoxKey
+import io.github.hinkolas.openbalance.core.LedgerCrypto
 import io.github.hinkolas.openbalance.core.MemberId
 import io.github.hinkolas.openbalance.core.SigningKey
 import io.github.hinkolas.openbalance.core.base64Url
@@ -18,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
 data class GroupCredentials(
     val server: String,
     val groupId: String,
-    val secret: String,
+    /** Every epoch secret this device has, by epoch (PROTOCOL.md §3.1). */
+    val secrets: List<String>,
     val memberId: MemberId,
     val memberSeed: String,
     /**
@@ -36,15 +39,18 @@ data class GroupCredentials(
     val addedAt: Long = System.currentTimeMillis(),
 ) {
     val groupUuid: UUID get() = UUID.fromString(groupId)
-    val secretBytes: ByteArray get() = Base64Url.decode(secret) ?: error("corrupt secret")
+    val secretBytes: List<ByteArray> get() = secrets.map { Base64Url.decode(it) ?: error("corrupt secret") }
     val signer: SigningKey get() = SigningKey(Base64Url.decode(memberSeed) ?: error("corrupt member key"))
+
+    /** This device's box key (§3.5), derived from its member key seed. */
+    val box: BoxKey get() = LedgerCrypto.boxKey(Base64Url.decode(memberSeed) ?: error("corrupt member key"))
 
     /** Never print secrets or keys (CLAUDE.md). */
     override fun toString(): String = "GroupCredentials(group=$groupId, member=$memberId, server=$server, registered=$registered)"
 
     companion object {
-        fun create(server: String, groupId: UUID, secret: ByteArray, memberId: MemberId, memberSeed: ByteArray, registered: Boolean) =
-            GroupCredentials(server, groupId.lower, secret.base64Url, memberId, memberSeed.base64Url, registered = registered)
+        fun create(server: String, groupId: UUID, secrets: List<ByteArray>, memberId: MemberId, memberSeed: ByteArray, registered: Boolean) =
+            GroupCredentials(server, groupId.lower, secrets.map { it.base64Url }, memberId, memberSeed.base64Url, registered = registered)
     }
 }
 

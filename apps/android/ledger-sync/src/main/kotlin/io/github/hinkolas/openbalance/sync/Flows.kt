@@ -1,6 +1,7 @@
 package io.github.hinkolas.openbalance.sync
 
 import io.github.hinkolas.openbalance.core.Bytes
+import io.github.hinkolas.openbalance.core.Epochs
 import io.github.hinkolas.openbalance.core.EventData
 import io.github.hinkolas.openbalance.core.GroupCreatedData
 import io.github.hinkolas.openbalance.core.GroupRecoveryChangedData
@@ -9,6 +10,7 @@ import io.github.hinkolas.openbalance.core.MemberAddedData
 import io.github.hinkolas.openbalance.core.MemberClaimedData
 import io.github.hinkolas.openbalance.core.MemberDeviceClaimedData
 import io.github.hinkolas.openbalance.core.MemberDeviceInviteData
+import io.github.hinkolas.openbalance.core.MemberDeviceInvitedData
 import io.github.hinkolas.openbalance.core.MemberDeviceRemovedData
 import io.github.hinkolas.openbalance.core.MemberId
 import io.github.hinkolas.openbalance.core.MemberInviteRenewedData
@@ -23,7 +25,7 @@ import java.io.File
 
 /** Why a create, invite or join flow stopped. The app words it. */
 class FlowError(val kind: Kind) : Exception(kind.name) {
-    enum class Kind { NotAdmin, InviteUsed, SeatMissing, SeatTaken, UnsupportedServer, CreationCodeUsed, RecoveryReplaced, NotRecoverable }
+    enum class Kind { NotAdmin, InviteUsed, SeatMissing, SeatTaken, UnsupportedServer, CreationCodeUsed, RecoveryReplaced, NotRecoverable, NoEpochSecret }
 }
 
 // Create, invite, add and remove devices, join and recover (PROTOCOL.md §5.4).
@@ -41,36 +43,45 @@ suspend fun GroupSession.Companion.create(
     if (1 !in client.info().protocols) throw FlowError(FlowError.Kind.UnsupportedServer)
     val groupId = Uuids.v7()
     val key = SigningKey.generate()
+    val secret = randomBytes(32)
     val recoverySeed = randomBytes(32)
     val recovery = SigningKey(recoverySeed)
+    val recoveryBox = LedgerCrypto.boxKey(recoverySeed).publicKey
     try {
-        client.createGroup(token, groupId, key.publicKey, recovery.publicKey)
+        client.createGroup(token, groupId, key.publicKey, recovery.publicKey, Epochs.sealKeyring(listOf(secret), recoveryBox, groupId))
     } catch (e: ServerError) {
         if (e.status == 401) throw FlowError(FlowError.Kind.CreationCodeUsed)
         throw e
     }
-    val creds = GroupCredentials.create(server, groupId, randomBytes(32), Uuids.v7().lower, key.seed, registered = true)
+    val creds = GroupCredentials.create(server, groupId, listOf(secret), Uuids.v7().lower, key.seed, registered = true)
     store.save(creds)
     val session = GroupSession(creds, store, cacheRoot, scope)
-    session.submit(
-        EventData.GroupCreated(
-            GroupCreatedData(name, currency, GroupCreatedData.Admin(creds.memberId, myName, key.publicKey.base64Url), recovery.publicKey.base64Url),
-        ),
-    )
+    val admin = GroupCreatedData.Admin(creds.memberId, myName, key.publicKey.base64Url, creds.box.publicKey.base64Url)
+    session.submit(EventData.GroupCreated(GroupCreatedData(name, currency, admin, recovery.publicKey.base64Url, recoveryBox.base64Url)))
     session.syncNow()
-    return session to RecoveryLink(server, groupId, creds.memberId, creds.secretBytes, recoverySeed)
+    return session to RecoveryLink(server, groupId, creds.memberId, recoverySeed)
+}
+
+/** A new invite: its seed, key, box key, and keyring (every epoch secret so far, sealed to the box key; §5.4 steps 2 and 5). */
+private class NewInvite(val seed: ByteArray, val key: ByteArray, val box: ByteArray, val keyring: ByteArray)
+
+private fun GroupSession.newInvite(): NewInvite {
+    val seed = randomBytes(32)
+    val box = LedgerCrypto.boxKey(seed).publicKey
+    return NewInvite(seed, SigningKey(seed).publicKey, box, Epochs.sealKeyring(secrets, box, id))
 }
 
 /** Replace the recovery kit: the old one stops working. Returns the new one, which this device doesn't keep. */
 suspend fun GroupSession.newRecoveryKit(): RecoveryLink {
     if (!isAdmin) throw FlowError(FlowError.Kind.NotAdmin)
     val seed = randomBytes(32)
-    val recovery = SigningKey(seed)
-    client.replaceRecovery(credentials.value.signer, id, recovery.publicKey)
-    submit(EventData.GroupRecoveryChanged(GroupRecoveryChangedData(recovery.publicKey.base64Url)))
+    val recovery = SigningKey(seed).publicKey
+    val box = LedgerCrypto.boxKey(seed).publicKey
+    client.replaceRecovery(credentials.value.signer, id, recovery, Epochs.sealKeyring(secrets, box, id))
+    // Starts a new epoch too, so the old kit can't read what follows.
+    submit(EventData.GroupRecoveryChanged(GroupRecoveryChangedData(recovery.base64Url, box.base64Url)))
     syncNow()
-    val c = credentials.value
-    return RecoveryLink(c.server, id, me, c.secretBytes, seed)
+    return RecoveryLink(credentials.value.server, id, me, seed)
 }
 
 /**
@@ -111,8 +122,7 @@ suspend fun GroupSession.resetMember(member: MemberId): InviteLink {
 }
 
 private fun GroupSession.link(member: MemberId, seed: ByteArray): InviteLink {
-    val c = credentials.value
-    return InviteLink(c.server, id, member, c.secretBytes, seed)
+    return InviteLink(credentials.value.server, id, member, seed)
 }
 
 /**
@@ -122,13 +132,12 @@ private fun GroupSession.link(member: MemberId, seed: ByteArray): InviteLink {
 suspend fun GroupSession.addMember(name: String): InviteLink {
     if (!isAdmin) throw FlowError(FlowError.Kind.NotAdmin)
     val memberId = Uuids.v7().lower
-    val seed = randomBytes(32)
-    val invite = SigningKey(seed)
-    client.createInvite(credentials.value.signer, id, invite.publicKey)
-    updateCredentials { it.copy(invites = it.invites + (memberId to seed.base64Url)) }
-    submit(EventData.MemberAdded(MemberAddedData(memberId, name, invite.publicKey.base64Url)))
+    val invite = newInvite()
+    client.createInvite(credentials.value.signer, id, invite.key, invite.keyring)
+    updateCredentials { it.copy(invites = it.invites + (memberId to invite.seed.base64Url)) }
+    submit(EventData.MemberAdded(MemberAddedData(memberId, name, invite.key.base64Url, invite.box.base64Url)))
     syncNow()
-    return link(memberId, seed)
+    return link(memberId, invite.seed)
 }
 
 /** The invite of an unclaimed member, if this device created it. */
@@ -151,13 +160,12 @@ suspend fun GroupSession.renewInvite(member: MemberId): InviteLink {
             if (e.status != 404) throw e
         }
     }
-    val seed = randomBytes(32)
-    val invite = SigningKey(seed)
-    client.createInvite(credentials.value.signer, id, invite.publicKey)
-    updateCredentials { it.copy(invites = it.invites + (member to seed.base64Url)) }
-    submit(EventData.MemberInviteRenewed(MemberInviteRenewedData(member, invite.publicKey.base64Url)))
+    val invite = newInvite()
+    client.createInvite(credentials.value.signer, id, invite.key, invite.keyring)
+    updateCredentials { it.copy(invites = it.invites + (member to invite.seed.base64Url)) }
+    submit(EventData.MemberInviteRenewed(MemberInviteRenewedData(member, invite.key.base64Url, invite.box.base64Url)))
     syncNow()
-    return link(member, seed)
+    return link(member, invite.seed)
 }
 
 /**
@@ -177,13 +185,12 @@ fun GroupSession.deviceInviteLink(): InviteLink? {
  */
 suspend fun GroupSession.addDevice(): InviteLink {
     deviceInviteLink()?.let { return it }
-    val seed = randomBytes(32)
-    val invite = SigningKey(seed)
-    client.createInvite(credentials.value.signer, id, invite.publicKey, role = if (isAdmin) "admin" else "member")
-    updateCredentials { it.copy(deviceInvite = seed.base64Url) }
-    submit(EventData.MemberDeviceInvited(MemberDeviceInviteData(me, invite.publicKey.base64Url)))
+    val invite = newInvite()
+    client.createInvite(credentials.value.signer, id, invite.key, invite.keyring, role = if (isAdmin) "admin" else "member")
+    updateCredentials { it.copy(deviceInvite = invite.seed.base64Url) }
+    submit(EventData.MemberDeviceInvited(MemberDeviceInvitedData(me, invite.key.base64Url, invite.box.base64Url)))
     syncNow()
-    return link(me, seed)
+    return link(me, invite.seed)
 }
 
 /** Withdraw this device's pending device invite: its QR stops working. */
@@ -212,37 +219,39 @@ suspend fun GroupSession.Companion.join(
 ): GroupSession {
     val client = ServerClient(link.server)
     val invite = SigningKey(link.inviteSeed)
-    var creds = existing ?: GroupCredentials.create(link.server, link.groupId, link.secret, link.memberId, SigningKey.generate().seed, registered = false)
-    if (!creds.registered) {
+    val inviteBox = LedgerCrypto.boxKey(link.inviteSeed)
+    var creds = existing ?: GroupCredentials.create(link.server, link.groupId, emptyList(), link.memberId, SigningKey.generate().seed, registered = false)
+    if (!creds.registered || creds.secrets.isEmpty()) {
         // Save the key before the server learns it, so a crash can't strand the seat.
         store.save(creds)
         val member = creds.signer
-        try {
+        val keyring = try {
             client.claim(invite, member, link.groupId)
         } catch (e: ServerError) {
             if (e.status != 403 && e.status != 409) throw e
             // Used already: by us in an earlier attempt, or by someone else.
             try {
-                client.read(member, link.groupId, after = 0, limit = 1)
+                client.keyring(member, link.groupId)
             } catch (_: Exception) {
                 store.delete(link.groupId)
                 throw FlowError(FlowError.Kind.InviteUsed)
             }
         }
-        creds = creds.copy(registered = true)
+        creds = creds.copy(secrets = Epochs.openKeyring(keyring, inviteBox, link.groupId).map { it.base64Url }, registered = true)
         store.save(creds)
     }
-    val session = GroupSession(creds, store, cacheRoot, scope)
+    val session = GroupSession(creds, store, cacheRoot, scope, listOf(inviteBox))
     session.syncNow()
     val seat = session.state.value.members[creds.memberId] ?: throw FlowError(FlowError.Kind.SeatMissing)
     val memberKey = creds.signer.publicKey
+    val boxKey = creds.box.publicKey.base64Url
     val inviteKey = invite.publicKey
     val sig = invite.sign(LedgerCrypto.claimInput(link.groupId, memberKey))
     when {
         Bytes(memberKey) in seat.keys -> return session
-        !seat.isClaimed -> session.submit(EventData.MemberClaimed(MemberClaimedData(creds.memberId, memberKey.base64Url, sig.base64Url)))
+        !seat.isClaimed -> session.submit(EventData.MemberClaimed(MemberClaimedData(creds.memberId, memberKey.base64Url, boxKey, sig.base64Url)))
         Bytes(inviteKey) in seat.deviceInvites -> session.submit(
-            EventData.MemberDeviceClaimed(MemberDeviceClaimedData(creds.memberId, memberKey.base64Url, inviteKey.base64Url, sig.base64Url)),
+            EventData.MemberDeviceClaimed(MemberDeviceClaimedData(creds.memberId, memberKey.base64Url, boxKey, inviteKey.base64Url, sig.base64Url)),
         )
         else -> throw FlowError(FlowError.Kind.SeatTaken)
     }
@@ -260,33 +269,35 @@ suspend fun GroupSession.Companion.recover(
 ): GroupSession {
     val client = ServerClient(link.server)
     val recovery = SigningKey(link.recoverySeed)
-    var creds = existing ?: GroupCredentials.create(link.server, link.groupId, link.secret, link.adminId, SigningKey.generate().seed, registered = false)
-    if (!creds.registered) {
+    val recoveryBox = LedgerCrypto.boxKey(link.recoverySeed)
+    var creds = existing ?: GroupCredentials.create(link.server, link.groupId, emptyList(), link.adminId, SigningKey.generate().seed, registered = false)
+    if (!creds.registered || creds.secrets.isEmpty()) {
         store.save(creds)
         val member = creds.signer
-        try {
+        val keyring = try {
             client.recover(recovery, member, link.groupId)
         } catch (e: ServerError) {
             if (e.status != 403 && e.status != 409) throw e
             // Registered by an earlier attempt, or the kit was replaced.
             try {
-                client.read(member, link.groupId, after = 0, limit = 1)
+                client.keyring(member, link.groupId)
             } catch (err: Exception) {
                 store.delete(link.groupId)
                 if (e.status == 403) throw FlowError(FlowError.Kind.RecoveryReplaced)
                 throw err
             }
         }
-        creds = creds.copy(registered = true)
+        creds = creds.copy(secrets = Epochs.openKeyring(keyring, recoveryBox, link.groupId).map { it.base64Url }, registered = true)
         store.save(creds)
     }
-    val session = GroupSession(creds, store, cacheRoot, scope)
+    val session = GroupSession(creds, store, cacheRoot, scope, listOf(recoveryBox))
     session.syncNow()
     if (session.state.value.adminId != link.adminId) throw FlowError(FlowError.Kind.NotRecoverable)
     val memberKey = creds.signer.publicKey
     if (session.state.value.members[link.adminId]?.keys?.contains(Bytes(memberKey)) != true) {
         val sig = recovery.sign(LedgerCrypto.recoverInput(link.groupId, memberKey))
-        session.submit(EventData.MemberRecovered(MemberRecoveredData(link.adminId, memberKey.base64Url, sig.base64Url)))
+        session.submit(EventData.MemberRecovered(MemberRecoveredData(link.adminId, memberKey.base64Url, creds.box.publicKey.base64Url, sig.base64Url)))
+        // Starts a new epoch too: the old admin devices can't read what follows.
         session.syncNow()
     }
     return session

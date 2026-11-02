@@ -3,6 +3,8 @@ package io.github.hinkolas.openbalance.sync
 import io.github.hinkolas.openbalance.core.ArrivalRecordedData
 import io.github.hinkolas.openbalance.core.Balances
 import io.github.hinkolas.openbalance.core.EventData
+import io.github.hinkolas.openbalance.core.Ledger
+import io.github.hinkolas.openbalance.core.Rejection
 import io.github.hinkolas.openbalance.core.MemberUpdatedData
 import io.github.hinkolas.openbalance.core.Payment
 import io.github.hinkolas.openbalance.core.SigningKey
@@ -25,7 +27,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InviteLinkTests {
-    private val link = InviteLink("https://open-balance.example.com", Uuids.v7(), Uuids.v7().lower, randomBytes(32), randomBytes(32))
+    private val link = InviteLink("https://open-balance.example.com", Uuids.v7(), Uuids.v7().lower, randomBytes(32))
 
     @Test
     fun roundTrips() {
@@ -39,7 +41,7 @@ class InviteLinkTests {
         // URLComponents leaves ":" and "/" in the query; a fully escaped server works too.
         val escaped = link.url.replace("s=https://open-balance.example.com", "s=https%3A%2F%2Fopen-balance.example.com")
         assertEquals(link, InviteLink.parse(escaped))
-        val withPath = InviteLink("https://example.com/ob?x=1&y=2", link.groupId, link.memberId, link.secret, link.inviteSeed)
+        val withPath = InviteLink("https://example.com/ob?x=1&y=2", link.groupId, link.memberId, link.inviteSeed)
         assertEquals(withPath, InviteLink.parse(withPath.url))
     }
 
@@ -49,15 +51,16 @@ class InviteLinkTests {
             "", "https://example.com", link.url.substringBefore('#'),
             link.url.replace("v=1", "v=2"), link.url.replace("openbalance://join", "openbalance://other"),
             link.url.replace("s=https", "s=ftp"), link.url.replace(link.groupId.lower, "1-1-1-1-1"),
-            link.url.substringBefore("&i="),
+            link.url.substringBefore("#i=") + "#x=1",
         )) assertNull(InviteLink.parse(bad), bad)
     }
 
     @Test
     fun neverPrintsSecrets() {
-        val creds = GroupCredentials.create("https://x", link.groupId, link.secret, link.memberId, link.inviteSeed, registered = true)
-        assertTrue(creds.secret !in creds.toString() && creds.memberSeed !in creds.toString())
-        assertTrue("#" !in link.toString() && "k=" !in link.toString())
+        val creds = GroupCredentials.create("https://x", link.groupId, listOf(randomBytes(32)), link.memberId, link.inviteSeed, registered = true)
+        assertTrue(creds.secrets.single() !in creds.toString() && creds.memberSeed !in creds.toString())
+        assertTrue("#" !in link.toString() && "i=" !in link.toString())
+        assertTrue("k=" !in link.url) // no group secret in the QR
     }
 }
 
@@ -66,7 +69,7 @@ class LinkTests {
 
     @Test
     fun recoveryAndCreationLinksRoundTrip() {
-        val kit = RecoveryLink(server, Uuids.v7(), Uuids.v7().lower, randomBytes(32), randomBytes(32))
+        val kit = RecoveryLink(server, Uuids.v7(), Uuids.v7().lower, randomBytes(32))
         assertEquals(kit, RecoveryLink.parse(kit.url))
         assertEquals(kit, RecoveryLink.parse(" ${kit.url}\n"))
         assertTrue(kit.url.startsWith("openbalance://recover?v=1&s=https://open-balance.example.com&g="), kit.url)
@@ -77,7 +80,7 @@ class LinkTests {
 
         assertEquals(AppLink.Recovery(kit), AppLink.parse(kit.url))
         assertEquals(AppLink.Creation(creation), AppLink.parse(creation.url))
-        for (bad in listOf(kit.url.substringBefore("&r="), kit.url.replace("v=1", "v=2"), creation.url.dropLast(2), creation.url.replace("create", "join"))) {
+        for (bad in listOf(kit.url.substringBefore("#r=") + "#x=1", kit.url.replace("v=1", "v=2"), creation.url.dropLast(2), creation.url.replace("create", "join"))) {
             assertNull(AppLink.parse(bad), bad)
         }
     }
@@ -90,12 +93,14 @@ class OutboxTests {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             val key = SigningKey.generate()
-            val creds = GroupCredentials.create("http://127.0.0.1:9", Uuids.v7(), randomBytes(32), Uuids.v7().lower, key.seed, registered = false)
+            val creds = GroupCredentials.create("http://127.0.0.1:9", Uuids.v7(), listOf(randomBytes(32)), Uuids.v7().lower, key.seed, registered = false)
             val store = MemoryCredentialStore()
             val s = GroupSession(creds, store, dir, scope)
             s.submit(EventData.GroupCreated(io.github.hinkolas.openbalance.core.GroupCreatedData("Trip", "EUR",
-                io.github.hinkolas.openbalance.core.GroupCreatedData.Admin(creds.memberId, "Jonas", io.github.hinkolas.openbalance.core.Base64Url.encode(key.publicKey)),
-                io.github.hinkolas.openbalance.core.Base64Url.encode(SigningKey.generate().publicKey))))
+                io.github.hinkolas.openbalance.core.GroupCreatedData.Admin(creds.memberId, "Jonas", io.github.hinkolas.openbalance.core.Base64Url.encode(key.publicKey),
+                    io.github.hinkolas.openbalance.core.Base64Url.encode(creds.box.publicKey)),
+                io.github.hinkolas.openbalance.core.Base64Url.encode(SigningKey.generate().publicKey),
+                io.github.hinkolas.openbalance.core.Base64Url.encode(io.github.hinkolas.openbalance.core.BoxKey.generate().publicKey))))
             assertEquals("Trip", s.state.value.name)
             assertEquals(1, s.pendingCount.value)
             assertTrue(s.state.value.history.single().pending)
@@ -256,6 +261,11 @@ class IntegrationTests {
         assertFailsWith<ServerError> { ben.syncNow() }
         assertTrue(ben.isRemoved)
         assertEquals(listOf(laptop.deviceKey), laptop.state.value.members[ben.me]?.keys)
+        // The laptop started epoch 1 right after removing the phone.
+        assertEquals(1L, laptop.state.value.epoch)
+        assertTrue(!laptop.state.value.epochDue)
+        anna.syncNow()
+        assertEquals(laptop.secrets.map { it.toList() }, anna.secrets.map { it.toList() })
 
         // Then the laptop is lost too: Anna resets Ben, who joins again as himself.
         val p = Payment(Uuids.v7().lower, Payment.Kind.Expense, "Strom", date = "2026-11-02", amount = 9_000, track = false,
@@ -264,11 +274,22 @@ class IntegrationTests {
         laptop.submit(EventData.PaymentCreated(p))
         laptop.syncNow()
         anna.syncNow()
+
+        // Even with every blob from the server, the lost phone can't read the payment.
+        val all = ServerClient(server).read(laptop.credentials.value.signer, anna.id, after = 0).first
+        val phoneView = Ledger(anna.id, ben.secrets, listOf(ben.credentials.value.box))
+        phoneView.apply(all)
+        assertEquals(1, phoneView.secrets.size)
+        assertNull(phoneView.state.payments[p.id])
+        assertNotNull(anna.state.value.payments[p.id])
+
         val again = anna.resetMember(ben.me)
         runCatching { laptop.syncNow() }
         assertTrue(laptop.isRemoved)
         val benNew = GroupSession.join(again, null, MemoryCredentialStore(), dir("benNew"), scope)
         assertEquals(ben.me, benNew.me)
+        assertEquals(anna.secrets.map { it.toList() }, benNew.secrets.map { it.toList() }) // from the invite's keyring
+        assertEquals(2L, anna.state.value.epoch)
         assertEquals(4_500L, benNew.state.value.summary().balances[ben.me])
 
         // Anna loses her phone and restores the group with her recovery kit.
@@ -278,6 +299,7 @@ class IntegrationTests {
         runCatching { anna.syncNow() }
         assertTrue(anna.isRemoved)
         assertTrue(!anna.isAdmin)
+        assertEquals(3L, restored.state.value.epoch) // recovering started an epoch
 
         // A new kit replaces the old one.
         val newKit = restored.newRecoveryKit()
@@ -288,5 +310,40 @@ class IntegrationTests {
         benNew.syncNow()
         assertTrue(benNew.state.value.history.all { it.rejection == null })
         assertEquals(restored2.state.value, benNew.state.value)
+        assertEquals(5L, restored2.state.value.epoch) // the new kit and the second recovery each started one
+        assertEquals(6, benNew.secrets.size)
+    }
+
+    /**
+     * A device that writes before it has seen a new epoch: its event is stale,
+     * and it writes it again under the new epoch (PROTOCOL.md §5.4 step 10).
+     */
+    @Test
+    fun staleWritesAreWrittenAgain() = runBlocking {
+        if (server == null) return@runBlocking
+        val tmp = Files.createTempDirectory("ob-it").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val (anna, _) = GroupSession.create(server, token, "Büro", "EUR", "Anna", MemoryCredentialStore(), File(tmp, "anna"), scope)
+            val ben = GroupSession.join(anna.addMember("Ben"), null, MemoryCredentialStore(), File(tmp, "ben"), scope)
+
+            // Anna starts epoch 1 (a new recovery kit); Ben hasn't seen it and writes.
+            anna.newRecoveryKit()
+            assertEquals(1L, anna.state.value.epoch)
+            val p = Payment(Uuids.v7().lower, Payment.Kind.Expense, "Kaffee", date = "2026-11-02", amount = 1_200, track = false,
+                inSide = Payment.Side("exact", listOf(Payment.Line(anna.me, 600), Payment.Line(ben.me, 600))),
+                outSide = Payment.Side("exact", listOf(Payment.Line(ben.me, 1_200))))
+            ben.submit(EventData.PaymentCreated(p))
+            ben.syncNow()
+            ben.syncNow()
+            assertEquals(0, ben.pendingCount.value)
+            anna.syncNow()
+            assertNotNull(anna.state.value.payments[p.id])
+            assertEquals(1, anna.state.value.history.count { it.rejection == Rejection.StaleEpoch }) // the first attempt
+            assertEquals(anna.state.value, ben.state.value)
+        } finally {
+            scope.cancel()
+            tmp.deleteRecursively()
+        }
     }
 }

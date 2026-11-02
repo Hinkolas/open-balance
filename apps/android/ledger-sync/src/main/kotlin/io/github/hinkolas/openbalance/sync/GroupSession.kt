@@ -1,8 +1,12 @@
 package io.github.hinkolas.openbalance.sync
 
 import io.github.hinkolas.openbalance.core.Base64Url
+import io.github.hinkolas.openbalance.core.BoxKey
 import io.github.hinkolas.openbalance.core.Bytes
+import io.github.hinkolas.openbalance.core.EventCoding
 import io.github.hinkolas.openbalance.core.EventData
+import io.github.hinkolas.openbalance.core.Epochs
+import io.github.hinkolas.openbalance.core.Rejection
 import io.github.hinkolas.openbalance.core.EventWriter
 import io.github.hinkolas.openbalance.core.Ledger
 import io.github.hinkolas.openbalance.core.LedgerState
@@ -40,12 +44,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Thread-safe: state changes happen under one lock, syncs run one after
  * another, and everything observable is a [StateFlow].
+ *
+ * [extraBoxes] are box keys this device holds only while it joins or
+ * recovers (the invite's, the recovery key's): epochs started meanwhile are
+ * sealed to them (PROTOCOL.md §5.4 steps 3 and 8).
  */
 class GroupSession(
     credentials: GroupCredentials,
     internal val store: CredentialStore,
     cacheRoot: File,
     private val scope: CoroutineScope,
+    extraBoxes: List<BoxKey> = emptyList(),
 ) {
     val id: UUID = credentials.groupUuid
 
@@ -55,7 +64,7 @@ class GroupSession(
     private val lock = Any()
     private val cache = GroupCache(File(cacheRoot, "groups/${id.lower}"))
     internal val client = ServerClient(credentials.server)
-    private val ledger = Ledger(id, credentials.secretBytes)
+    private val ledger = Ledger(id, credentials.secretBytes, listOf(credentials.box) + extraBoxes)
     private val confirmed = ArrayList<RawEvent>(cache.loadEvents())
     private val outbox = ArrayList<SealedEvent>(cache.loadOutbox())
     private val pushed = HashSet<UUID>()
@@ -94,7 +103,11 @@ class GroupSession(
         _state = MutableStateFlow(ledger.state.snapshot())
         state = _state.asStateFlow()
         recompute()
+        keepSecrets()
     }
+
+    /** Every epoch secret this device has, by epoch. */
+    val secrets: List<ByteArray> get() = synchronized(lock) { ledger.secrets }
 
     val me: MemberId get() = _credentials.value.memberId
     val isAdmin: Boolean get() = _state.value.adminId == me && !isRemoved
@@ -113,9 +126,7 @@ class GroupSession(
     /** Seal an event as this member, show it, and sync. */
     fun submit(data: EventData): SealedEvent {
         val event = synchronized(lock) {
-            val c = _credentials.value
-            val writer = EventWriter(id, c.secretBytes, c.memberId, c.signer)
-            val e = writer.write(data, ledger.state.head)
+            val e = writer().write(data, ledger.state.head)
             outbox.add(e)
             cache.saveOutbox(outbox)
             recompute()
@@ -123,6 +134,21 @@ class GroupSession(
         }
         requestSync()
         return event
+    }
+
+    /** A writer for the current confirmed epoch. Must hold [lock]. */
+    private fun writer(): EventWriter {
+        val c = _credentials.value
+        val secret = ledger.currentSecret ?: throw FlowError(FlowError.Kind.NoEpochSecret)
+        return EventWriter(id, secret, ledger.state.epoch, c.memberId, c.signer)
+    }
+
+    /** Store epoch secrets found in the ledger, so a restart doesn't need the box keys they were sealed to. */
+    private fun keepSecrets() {
+        synchronized(lock) {
+            val found = ledger.secrets
+            if (found.size > _credentials.value.secrets.size) updateCredentials { it.copy(secrets = found.map { s -> s.base64Url }) }
+        }
     }
 
     fun updateCredentials(change: (GroupCredentials) -> GroupCredentials) {
@@ -146,6 +172,7 @@ class GroupSession(
                     noteAccess {
                         push()
                         pull()
+                        startEpochIfDue()
                     }
                     _lastError.value = null
                 } catch (e: CancellationException) {
@@ -167,6 +194,7 @@ class GroupSession(
             noteAccess {
                 push()
                 pull()
+                startEpochIfDue()
             }
             _lastError.value = null
         }
@@ -187,17 +215,52 @@ class GroupSession(
 
     /**
      * Append outbox events not yet sent in this run. They stay in the outbox
-     * (and on screen as pending) until a pull returns them.
+     * (and on screen as pending) until a pull returns them. Each is sealed
+     * with the current epoch first; after an epoch start the rest waits for a
+     * pull, so it is sealed with the new epoch (§5.4 step 10).
      */
     private suspend fun push() {
         val c = _credentials.value
         if (!c.registered) return
-        val unsent = synchronized(lock) { outbox.filter { it.id !in pushed } }
-        if (unsent.isEmpty()) return
-        for (batch in unsent.chunked(100)) {
+        while (true) {
+            val batch = synchronized(lock) {
+                val unsent = outbox.filter { it.id !in pushed }
+                if (unsent.isEmpty()) return
+                val w = writer()
+                val batch = ArrayList<SealedEvent>()
+                for (e in unsent) {
+                    val sealed = if (e.epoch == w.epoch) e else w.reseal(e)
+                    if (sealed !== e) outbox[outbox.indexOfFirst { it.id == e.id }] = sealed
+                    batch.add(sealed)
+                    if (batch.size == 100 || startsEpoch(sealed)) break
+                }
+                cache.saveOutbox(outbox)
+                batch
+            }
             client.append(c.signer, id, batch)
             synchronized(lock) { pushed.addAll(batch.map { it.id }) }
+            if (batch.any(::startsEpoch)) pull()
         }
+    }
+
+    private fun startsEpoch(e: SealedEvent): Boolean =
+        (try { EventCoding.decode(e.body).second } catch (_: Exception) { null }) is EventData.GroupEpochStarted
+
+    /**
+     * Start the epoch the ledger says is due, if it's ours to start: we made
+     * it due, or we are the admin (§5.4 step 10). Once per sync.
+     */
+    private suspend fun startEpochIfDue() {
+        synchronized(lock) {
+            val s = ledger.state
+            if (!s.epochDue || isRemoved || !(s.epochDueBy == me || s.adminId == me) || ledger.currentSecret == null ||
+                outbox.any(::startsEpoch)
+            ) return
+            val (data, _) = Epochs.start(s.epoch + 1, s.readers, id)
+            submit(EventData.GroupEpochStarted(data))
+        }
+        push()
+        pull()
     }
 
     private suspend fun pull() {
@@ -209,14 +272,23 @@ class GroupSession(
             val (page, head) = client.read(signer, id, after)
             val done = synchronized(lock) {
                 val events = page.filter { it.seq > ledger.state.lastSeq }
+                var again = emptyList<EventData>()
                 if (events.isNotEmpty()) {
                     confirmed.addAll(events)
                     ledger.apply(events)
                     cache.saveEvents(confirmed)
+                    keepSecrets()
+                    val finished = outbox.filter { it.id in ledger.state.seenIds }
                     outbox.removeAll { it.id in ledger.state.seenIds }
                     cache.saveOutbox(outbox)
+                    // Ours, but sealed with an epoch that had ended: write them again.
+                    val stale = ledger.state.history.takeLast(events.size).filter { it.rejection == Rejection.StaleEpoch }.map { it.eventId }.toSet()
+                    again = finished.filter { it.id in stale && !startsEpoch(it) }.mapNotNull {
+                        try { EventCoding.decode(it.body).second } catch (_: Exception) { null }
+                    }
                     recompute()
                 }
+                for (d in again) try { submit(d) } catch (_: Exception) {}
                 page.isEmpty() || ledger.state.lastSeq >= head || ledger.state.inconsistency != null
             }
             if (done) break
