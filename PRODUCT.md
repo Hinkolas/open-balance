@@ -48,7 +48,8 @@ counts once its arrival is confirmed, instalment by instalment.
 - Arrivals are recorded per receiver, in parts; only arrived money counts.
 - One currency per group, fixed at creation.
 - Offline-first: changes show immediately and sync later.
-- Native iOS 26+ first (SwiftUI); Android and Windows later.
+- Native per platform: iOS 26+ (SwiftUI), Android 11+ (Jetpack Compose);
+  Windows later.
 
 ## Brand Commitments
 

@@ -51,7 +51,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -277,7 +277,7 @@ private fun AmountStep(ui: GroupUi, draft: PaymentDraft, padding: PaddingValues,
 
 @Composable
 private fun SideStep(ui: GroupUi, draft: PaymentDraft, side: Side, isLast: Boolean, padding: PaddingValues, settleTitle: String, update: (PaymentDraft) -> Unit) {
-    val context = LocalContext.current
+    val res = LocalResources.current
     val members = PaymentDraft.members(ui.state, ui.me)
     val currency = ui.state.currency
     val form = if (side == Side.Received) draft.received else draft.owned
@@ -287,8 +287,8 @@ private fun SideStep(ui: GroupUi, draft: PaymentDraft, side: Side, isLast: Boole
     val focus = LocalFocusManager.current
 
     val status: Pair<String, Boolean>? = when {
-        resolution.invalid.isNotEmpty() -> context.getString(R.string.use_amount_or_percent) to false
-        resolution.usedFallback -> context.getString(
+        resolution.invalid.isNotEmpty() -> res.getString(R.string.use_amount_or_percent) to false
+        resolution.usedFallback -> res.getString(
             when {
                 expense && side == Side.Owned -> R.string.fallback_paid_all
                 expense -> R.string.fallback_equal
@@ -296,9 +296,9 @@ private fun SideStep(ui: GroupUi, draft: PaymentDraft, side: Side, isLast: Boole
                 else -> R.string.fallback_same
             },
         ) to true
-        resolution.amounts != null -> context.getString(R.string.adds_up) to true
-        resolution.leftover > 0 -> context.getString(R.string.left_to_distribute, ui.money(resolution.leftover)) to false
-        resolution.leftover < 0 -> context.getString(R.string.too_much, ui.money(-resolution.leftover)) to false
+        resolution.amounts != null -> res.getString(R.string.adds_up) to true
+        resolution.leftover > 0 -> res.getString(R.string.left_to_distribute, ui.money(resolution.leftover)) to false
+        resolution.leftover < 0 -> res.getString(R.string.too_much, ui.money(-resolution.leftover)) to false
         else -> null
     }
 

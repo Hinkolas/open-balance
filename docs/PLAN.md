@@ -20,7 +20,7 @@ of ciphertext and never sees names or amounts.
 | Data | Append-only encrypted event ledger per group; clients replay it into state | Server never sees content; history is reproducible from the ledger |
 | Server | Go, net/http, sqlc + pgx/v5, Postgres 17, headless JSON API, hosted on skali | |
 | Hosting model | Bring your own server. Only the server owner (`ADMIN_TOKEN`) creates groups | |
-| Crypto | HKDF-SHA256, ChaCha20-Poly1305, Ed25519, SHA-256. CryptoKit on iOS, stdlib + x/crypto in Go | Available natively on every target platform |
+| Crypto | HKDF-SHA256, ChaCha20-Poly1305, Ed25519, SHA-256. CryptoKit on iOS, BouncyCastle (lightweight API) on Android, stdlib + x/crypto in Go | Available on every target platform; BouncyCastle behaves the same on every Android version |
 | Identity | One Ed25519 key per device of a member per group; a member (a person or a company) may have several, all equal. Signs events (clients verify) and requests (server verifies). No accounts | A member is identified by its keys; tracking is per member, not per person |
 | Joining | Per-member invite: admin adds and names the member, shows that member's QR (server, group id, member id, group secret, one-time invite key) for its first device. Further devices: any device of the member shows a one-time device QR for its own member (2026-11-01) | One invite, one key; the admin can't add devices to a member that already joined, so nobody else can speak for it |
 | Permissions | Server: who may read and write (key registry, roles). Clients: content rules, enforced identically, invalid events stay visible | The server can't see content |
@@ -28,8 +28,8 @@ of ciphertext and never sees names or amounts.
 | Payments | One event type with in split, out split, `track` flag. Income, Expense and Settle up are forms over it | One math rule on every platform; new forms need no protocol change |
 | Balances | Net per member, debt simplification (greedy, deterministic) | |
 | Money | Integer minor units, one currency per group, set at creation | |
-| Key storage | iCloud Keychain (end-to-end encrypted by Apple, synced across the person's devices) | Survives losing a phone |
-| Clients | Native per platform. iOS first: SwiftUI, iOS 26+, Swift 6. Android and Windows later, rewritten against `spec/vectors` | |
+| Key storage | iOS: iCloud Keychain (end-to-end encrypted by Apple, synced across the person's devices). Android: files sealed with an Android Keystore AES-GCM key, not backed up (2026-11-02) | iOS survives losing a phone; on Android a lost phone needs a device invite from another device of the member |
+| Clients | Native per platform, rewritten against `spec/vectors`. iOS: SwiftUI, iOS 26+, Swift 6. Android: Jetpack Compose, Material 3, Kotlin, Android 11+ (2026-11-02). Windows later | |
 | Language | German and English (String Catalogs), informal "du" in German | |
 | Design | Quitt's visual language (`docs/DESIGN.md`) | |
 | Name | Open Balance, slug `open-balance`, URL scheme `openbalance://` | |
@@ -50,7 +50,11 @@ apps/apple/
     LedgerCore/        crypto, envelope, events, reducer, balances. Pure Swift
     LedgerSync/        API client, outbox, local store, SSE
     Design/            tokens and components (port of QuittDesign)
-apps/android/  apps/windows/   later
+apps/android/
+  ledger-core/         = LedgerCore in Kotlin, pure JVM, runs spec/vectors
+  ledger-sync/         = LedgerSync in Kotlin (OkHttp, coroutines), pure JVM
+  app/                 Compose app: model, design, ui
+apps/windows/          later
 spec/vectors/          JSON test vectors, the cross-platform contract
 docs/
 ```
@@ -92,7 +96,26 @@ servers), and a separate **+**.
   first (it hands out the group secret). App lock is the system's own
   "Require Face ID" (iOS 18+); the group settings point to it. (2026-11-02)
 
-## Phases
+## Android app (2026-11-02)
+
+The iOS app's structure and flows, in Android's idiom (docs/DESIGN.md,
+Android): a navigation bar for the four sections, a floating + button,
+full-screen task screens instead of sheets, bottom sheets for small tasks.
+
+- Kotlin modules mirror the Swift packages one to one and pass the same
+  vectors and the ported ledger and integration tests.
+- Event bodies decode exactly like Swift's `JSONDecoder` (no quoted
+  numbers, required fields typed), and lenient spots of the Swift client
+  are matched on purpose (base64url also takes `+` and `/`; dates accept a
+  leading `+` per part) so both clients reject the same events. Better: pin
+  these in `ledger.json` and tighten both.
+- QR: generated and scanned with ZXing (CameraX preview), no Google Play
+  services. Invite links also open from the system camera app
+  (`openbalance://join` intent filter).
+- Showing an invite or device QR asks for the fingerprint, face or screen
+  lock (BiometricPrompt), like Face ID on iOS.
+- Release builds allow HTTPS only; debug builds also plain HTTP.
+
 
 0. **Spec**: `docs/PROTOCOL.md`, math vectors (`spec/vectors/balances.json`,
    `transfers.json`). Repo, README, CLAUDE.md. ✓ 2026-11-01
@@ -111,7 +134,10 @@ servers), and a separate **+**.
 5. **iOS UI**: Design package, shell, create group, add member + QR, join,
    overview, payment forms, payment detail with arrivals, history,
    German + English. First version ✓ 2026-11-01, not yet run in a simulator.
-6. **Release**: App Store assets, privacy copy (what the server sees),
+6. **Android**: ledger-core, ledger-sync, Compose app; vectors, ledger and
+   integration tests green; interop with the Swift client checked against a
+   local server. ✓ 2026-11-02
+7. **Release**: App Store and Play Store assets, privacy copy (what the server sees),
    deploy to skali at the production domain.
 
 ## Roadmap
@@ -122,7 +148,9 @@ servers), and a separate **+**.
 - Encrypted snapshots for long ledgers; encrypted attachments (receipt photos)
   in a bucket.
 - Push notifications ("group changed", no content) via APNs.
-- Android, Windows (and macOS via the Apple target).
+- Windows (and macOS via the Apple target).
+- Android: synced key backup (Google Block Store, end-to-end encrypted)
+  so a lost phone doesn't need a device invite.
 - Payment handoff from Quitt: IBAN / PayPal.me inside the encrypted ledger,
   EPC QR on Settle up.
 

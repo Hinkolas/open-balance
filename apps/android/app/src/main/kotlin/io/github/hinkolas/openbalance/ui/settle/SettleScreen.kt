@@ -20,7 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,7 +66,7 @@ fun SettleScreen(session: GroupSession) {
     val ui = rememberGroupUi(session)
     val model = LocalAppModel.current
     val nav = LocalNav.current
-    val context = LocalContext.current
+    val res = LocalResources.current
     val state = ui.state
     val summary = ui.summary
     val plan = summary.expectedTransfers
@@ -85,7 +85,7 @@ fun SettleScreen(session: GroupSession) {
         youPay.isNotEmpty() -> PlanGroup.Pay
         else -> null
     }
-    val fewest = context.getString(R.string.fewest_transfers)
+    val fewest = res.getString(R.string.fewest_transfers)
     fun footer(note: String?, isLast: Boolean): (@Composable () -> Unit)? {
         val text = listOfNotNull(note, fewest.takeIf { isLast }).joinToString("\n\n")
         return if (text.isEmpty()) null else ({ SectionFooter(text) })
@@ -118,8 +118,8 @@ fun SettleScreen(session: GroupSession) {
             }))
         }
         if (youPay.isNotEmpty()) {
-            sectionItems("pay", youPay, { it }, header = context.getString(R.string.you_pay),
-                footer = footer(context.getString(R.string.settling_records), last == PlanGroup.Pay)) { to ->
+            sectionItems("pay", youPay, { it }, header = res.getString(R.string.you_pay),
+                footer = footer(res.getString(R.string.settling_records), last == PlanGroup.Pay)) { to ->
                 val now = summary.payableNow(ui.me, to)
                 PlanRow(ui, to, total = amount(plan, ui.me, to), now = now, onTheWay = sent[to] ?: 0, paying = true) {
                     openPaymentForm(model, nav, PaymentDraft.settle(Balances.Transfer(ui.me, to, now), state))
@@ -127,15 +127,15 @@ fun SettleScreen(session: GroupSession) {
             }
         }
         if (youGet.isNotEmpty()) {
-            sectionItems("get", youGet, { it }, header = context.getString(R.string.you_receive),
-                footer = footer(context.getString(R.string.confirm_under_still_expected), last == PlanGroup.Get)) { from ->
+            sectionItems("get", youGet, { it }, header = res.getString(R.string.you_receive),
+                footer = footer(res.getString(R.string.confirm_under_still_expected), last == PlanGroup.Get)) { from ->
                 PlanRow(ui, from, total = amount(plan, from, ui.me), now = summary.payableNow(from, ui.me), onTheWay = incoming[from] ?: 0, paying = false) {}
             }
         }
         if (others.isNotEmpty()) {
             sectionItems(
                 "others", others, { "${it.from}-${it.to}" },
-                header = context.getString(if (youPay.isEmpty() && youGet.isEmpty()) R.string.who_pays_whom else R.string.between_others),
+                header = res.getString(if (youPay.isEmpty() && youGet.isEmpty()) R.string.who_pays_whom else R.string.between_others),
                 footer = footer(null, true),
             ) { t ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -145,7 +145,7 @@ fun SettleScreen(session: GroupSession) {
             }
         }
         if (waiting.isNotEmpty()) {
-            sectionItems("expected", waiting, { it.id }, header = context.getString(R.string.still_expected)) { item ->
+            sectionItems("expected", waiting, { it.id }, header = res.getString(R.string.still_expected)) { item ->
                 WaitingRow(ui, item, onClick = { nav.navigate(Routes.payment(item.record.id)) })
             }
         }

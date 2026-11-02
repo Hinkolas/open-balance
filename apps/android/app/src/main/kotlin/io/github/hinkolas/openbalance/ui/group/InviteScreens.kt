@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -83,6 +84,7 @@ fun AddMemberScreen(session: GroupSession) {
     val ui = rememberGroupUi(session)
     val nav = LocalNav.current
     val context = LocalContext.current
+    val res = LocalResources.current
     val activity = LocalActivity.current as FragmentActivity
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
@@ -98,9 +100,9 @@ fun AddMemberScreen(session: GroupSession) {
         error = null
         scope.launch {
             try {
-                if (DeviceOwner.confirm(activity, context.getString(R.string.confirm_owner_invite))) link = session.addMember(trimmed)
+                if (DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_invite))) link = session.addMember(trimmed)
             } catch (e: Exception) {
-                error = context.errorText(e)
+                error = res.errorText(e)
             } finally {
                 working = false
             }
@@ -198,6 +200,7 @@ fun DeviceInviteScreen(session: GroupSession) {
 @Composable
 private fun InviteQrContent(ui: GroupUi, link: InviteLink, modifier: Modifier = Modifier, isDevice: Boolean = false, footer: @Composable () -> Unit = {}) {
     val context = LocalContext.current
+    val res = LocalResources.current
     val name = ui.name(link.memberId)
     val me = ui.state.members[ui.me]?.name ?: ""
     val url = link.url

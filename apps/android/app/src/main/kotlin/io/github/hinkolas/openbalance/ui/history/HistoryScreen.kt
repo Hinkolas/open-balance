@@ -1,6 +1,6 @@
 package io.github.hinkolas.openbalance.ui.history
 
-import android.content.Context
+import android.content.res.Resources
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,7 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -125,12 +125,12 @@ data class HistoryEntry(
 fun HistoryScreen(session: GroupSession, filter: HistoryFilter, setFilter: (HistoryFilter) -> Unit) {
     val ui = rememberGroupUi(session)
     val nav = LocalNav.current
-    val context = LocalContext.current
+    val res = LocalResources.current
     var query by rememberSaveable { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
     val colors = HistoryColors(positive = Brand.positive, negative = Brand.negative, neutral = MaterialTheme.colorScheme.outline)
     val all = ui.state.history
-    val entries = remember(ui, colors) { all.associate { it.eventId to entry(context, ui, it, colors) } }
+    val entries = remember(ui, colors, res) { all.associate { it.eventId to entry(res, ui, it, colors) } }
     val q = query.trim()
     val shown = all.asReversed().filter { item ->
         filter.includes(item) && (q.isEmpty() || entries.getValue(item.eventId).let { e -> e.title.contains(q, ignoreCase = true) || e.detail.contains(q, ignoreCase = true) })
@@ -200,14 +200,14 @@ fun HistoryScreen(session: GroupSession, filter: HistoryFilter, setFilter: (Hist
         }
         for (day in dayOrder) {
             val items = days.getValue(day)
-            sectionItems("day-$day", items, { it.eventId }, header = dayTitle(context, day)) { item ->
+            sectionItems("day-$day", items, { it.eventId }, header = dayTitle(res, day)) { item ->
                 val entry = entries.getValue(item.eventId)
                 val pid = entry.payment
                 val open = pid != null && item.rejection == null && ui.state.payments[pid] != null
                 HistoryRow(
                     entry,
                     time = Dates.timestamp(item.at)?.let(Dates::time) ?: "–",
-                    rejection = item.rejection?.let(context::reasonText),
+                    rejection = item.rejection?.let(res::reasonText),
                     pending = item.pending,
                     ui = ui,
                     modifier = if (open) Modifier.clickable { nav.navigate(Routes.payment(pid!!)) } else Modifier,
@@ -230,11 +230,11 @@ private fun Empty(title: String, text: String?, icon: ImageVector) {
     }
 }
 
-private fun dayTitle(context: Context, day: LocalDate?): String {
-    if (day == null) return context.getString(R.string.unknown_date)
+private fun dayTitle(res: Resources, day: LocalDate?): String {
+    if (day == null) return res.getString(R.string.unknown_date)
     val today = LocalDate.now()
-    if (day == today) return context.getString(R.string.today)
-    if (day == today.minusDays(1)) return context.getString(R.string.yesterday)
+    if (day == today) return res.getString(R.string.today)
+    if (day == today.minusDays(1)) return res.getString(R.string.yesterday)
     val pattern = if (day.year == today.year) "EEEEdMMMM" else "EEEEdMMMMy"
     val skeleton = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), pattern)
     return day.format(DateTimeFormatter.ofPattern(skeleton, Locale.getDefault()))
@@ -243,9 +243,9 @@ private fun dayTitle(context: Context, day: LocalDate?): String {
 /** Colors resolved in composition, for building entries outside it. */
 data class HistoryColors(val positive: Color, val negative: Color, val neutral: Color)
 
-private fun entry(context: Context, ui: GroupUi, item: HistoryItem, c: HistoryColors): HistoryEntry {
+private fun entry(res: Resources, ui: GroupUi, item: HistoryItem, c: HistoryColors): HistoryEntry {
     val by = ui.objectName(item.author)
-    fun s(id: Int, vararg args: Any) = context.getString(id, *args)
+    fun s(id: Int, vararg args: Any) = res.getString(id, *args)
     fun member(id: MemberId) = EventSubject.Initial(ui.initial(id))
     fun payment(id: PaymentId): Payment? = ui.state.payments[id]?.payment
     return when (val d = item.data) {

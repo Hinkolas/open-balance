@@ -1,6 +1,7 @@
 package io.github.hinkolas.openbalance.model
 
 import android.content.Context
+import android.content.res.Resources
 import android.icu.text.ListFormatter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,9 +66,9 @@ class GroupUi(val session: GroupSession, val state: LedgerState, private val con
     /** §7.5: the receiver, the admin, or anyone for a seat nobody claimed yet. */
     fun canRecordArrival(member: MemberId): Boolean = member == me || isAdmin || state.members[member]?.isClaimed == false
 
-    /** "Anna, Ben and you" in the user's language. */
+    /** "Anna, Ben and you" in the user's language, after "by" or "at" (German "dir", not "Du"). */
     fun names(side: Payment.Side): String =
-        ListFormatter.getInstance(Locale.getDefault()).format(side.lines.filter { it.amount > 0 }.map { name(it.member) })
+        ListFormatter.getInstance(Locale.getDefault()).format(side.lines.filter { it.amount > 0 }.map { objectName(it.member) })
 
     /** A settle up is about who paid whom; its title is "From → To". */
     fun title(p: Payment): String {
@@ -109,7 +110,7 @@ object Dates {
 }
 
 /** What went wrong, in the user's language. Server messages come from the server. */
-fun Context.errorText(e: Throwable): String = when (e) {
+fun Resources.errorText(e: Throwable): String = when (e) {
     is FlowError -> getString(
         when (e.kind) {
             FlowError.Kind.NotAdmin -> R.string.error_not_admin
@@ -124,13 +125,13 @@ fun Context.errorText(e: Throwable): String = when (e) {
     else -> e.localizedMessage ?: e.toString()
 }
 
-fun Context.inconsistencyText(i: Inconsistency): String = when (i) {
+fun Resources.inconsistencyText(i: Inconsistency): String = when (i) {
     is Inconsistency.Gap -> getString(R.string.inconsistency_gap, i.expected, i.got)
     is Inconsistency.Fork -> getString(R.string.inconsistency_fork, i.memberName ?: getString(R.string.a_member), i.seq)
     Inconsistency.BadGenesis -> getString(R.string.inconsistency_genesis)
 }
 
-fun Context.reasonText(r: Rejection): String = getString(
+fun Resources.reasonText(r: Rejection): String = getString(
     when (r) {
         Rejection.Decrypt -> R.string.reason_decrypt
         Rejection.Malformed -> R.string.reason_malformed

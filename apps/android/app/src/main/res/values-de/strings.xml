@@ -43,7 +43,6 @@
     <string name="a_member">ein Mitglied</string>
     <string name="inconsistency_genesis">Der erste Eintrag dieser Gruppe ist keine gültige Gruppengründung.</string>
     <string name="waiting_for_arrival">Wartet auf Eingang</string>
-    <string name="arrived_action">Angekommen</string>
     <string name="confirm_what_arrived">Eingang bestätigen</string>
     <string name="balances">Salden</string>
     <string name="invited_badge">Eingeladen</string>
@@ -219,7 +218,6 @@
     <string name="what_for_income">Wofür? z. B. Projekt Nordlicht</string>
     <string name="what_for_expense">Wofür? z. B. Abendessen</string>
     <string name="date">Datum</string>
-    <string name="amount">Betrag</string>
     <string name="give_rest_to">Rest an …</string>
     <string name="total">Gesamt</string>
     <string name="gets_the_rest">bekommt den Rest</string>
@@ -252,7 +250,6 @@
     <string name="counts_as_arrives">Zählt, sobald das Geld ankommt.</string>
     <string name="use_amount_or_percent" formatted="false">Erlaubt sind Beträge oder Prozente wie 15%.</string>
     <string name="amount_or_percent" formatted="false">Betrag oder %</string>
-    <string name="percent_hint" formatted="false">0 oder 15%</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d Änderung wartet</item>
         <item quantity="other">Offline – %d Änderungen warten</item>

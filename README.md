@@ -10,7 +10,7 @@ cmd/server/       Go server (headless JSON API): serve | migrate
 internal/         api, store (sqlc), protocol
 migrations/       Postgres schema
 apps/apple/       SwiftUI app (iOS 26+) and its Swift packages
-apps/android/     later
+apps/android/     Compose app (Android 11+) and its Kotlin modules
 apps/windows/     later
 spec/vectors/     test vectors every implementation must pass
 docs/             plan, protocol, design
@@ -45,6 +45,21 @@ go run ./cmd/server vectors spec/vectors
 
 # iOS app
 open apps/apple/OpenBalance.xcodeproj
+
+# Android (JDK from Android Studio, SDK in ~/Library/Android/sdk)
+cd apps/android
+./gradlew :ledger-core:test                # protocol + all of spec/vectors
+OB_TEST_SERVER=http://127.0.0.1:8787 OB_TEST_OWNER_TOKEN=… ./gradlew :ledger-sync:test
+./gradlew :app:installDebug                # onto a running emulator or phone
+```
+
+The Android emulator can't reach `open-balance.localhost`. Debug builds
+accept plain `http://`, so run the server without TLS on the Mac and forward
+its port into the emulator:
+
+```sh
+DATABASE_URL=… ADMIN_TOKEN=… PORT=8787 go run ./cmd/server serve
+adb reverse tcp:8787 tcp:8787              # then add server http://127.0.0.1:8787
 ```
 
 The iOS Simulator has its own trust store. Add the development CA once per

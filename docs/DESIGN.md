@@ -115,3 +115,35 @@ English and German (String Catalogs), short, verbs over nouns.
 | sides | Wer bekommt das Geld? / Wem gehört es? | Who gets the money? / Whom does it belong to? |
 | arrival | angekommen, erwartet | arrived, expected |
 | status | quitt, offen | settled, open |
+
+## Android
+
+Status: 2026-11-02. The same product in Android's own idiom: Material 3
+supplies layout, navigation and controls; the brand shows in the same three
+places (one emerald, money in tabular figures, the balance line). Code:
+`apps/android/app/src/main/kotlin/…/design` (`Theme.kt`, `Components.kt`).
+
+| iOS | Android |
+|---|---|
+| Tab bar: Overview, Settle up, History, Group | `NavigationBar` with the same four sections |
+| + toolbar `Menu` | Floating action button with a menu (Income, Expense, Settle up), on the same three tabs |
+| Large navigation title | `LargeTopAppBar` that collapses on scroll |
+| Group switcher (`toolbarTitleMenu`) | Tap the Overview title (▾) for a menu |
+| `.insetGrouped` lists | Grouped sections like Android's Settings: tinted header, rows in one rounded container (`surfaceContainerLow`), footer below |
+| Sheets for tasks | Full-screen task screens: close leading, title, action (`Next`, `Save`) trailing; slide up |
+| Small sheets (record arrival, rename) | `ModalBottomSheet` |
+| Multi-step sheet with `NavigationStack` | Steps in one task screen; back arrow and system back go one step back |
+| Swipe actions, context menus | Visible trailing buttons (confirm arrival) and overflow menus (⋮) |
+| `confirmationDialog` | `AlertDialog` |
+| Pull to refresh | `PullToRefreshBox` |
+| Face ID before an invite QR | `BiometricPrompt` (biometrics or screen lock) |
+
+Color: a static Material 3 scheme built around the icon's emerald (no
+dynamic color, so the brand stays recognizable). `Brand.tint` and
+`Brand.positive` are the scheme's primary, `Brand.negative` its error.
+Red and green never carry meaning alone, as on iOS.
+
+Type: Material 3 type scale in `sp` (follows the font size setting). Money
+uses `AmountType` (tabular figures; `hero`, `input`, `row`). Android has no
+system rounded face, so amounts use the default face. Sizes that should grow
+with the font size (avatars, event icons) use `scaled(dp)`.

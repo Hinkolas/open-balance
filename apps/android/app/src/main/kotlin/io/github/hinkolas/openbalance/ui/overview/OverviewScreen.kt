@@ -26,7 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -67,7 +67,7 @@ private const val RECENT_LIMIT = 5
 fun OverviewScreen(session: GroupSession, showAllPayments: () -> Unit) {
     val ui = rememberGroupUi(session)
     val nav = LocalNav.current
-    val context = LocalContext.current
+    val res = LocalResources.current
     var arrivalFor by remember { mutableStateOf<ArrivalTarget?>(null) }
     val state = ui.state
     val summary = ui.summary
@@ -107,13 +107,13 @@ fun OverviewScreen(session: GroupSession, showAllPayments: () -> Unit) {
                     colors = listItemColors(),
                     leadingContent = { Icon(Icons.Outlined.GppBad, null, tint = Brand.negative) },
                     headlineContent = { Text(stringResource(R.string.history_unverifiable), style = MaterialTheme.typography.titleMedium) },
-                    supportingContent = { Text(context.inconsistencyText(problem)) },
+                    supportingContent = { Text(res.inconsistencyText(problem)) },
                 )
             }))
         }
 
         if (waiting.isNotEmpty()) {
-            sectionItems("waiting", waiting, { it.id }, header = context.getString(R.string.waiting_for_arrival)) { item ->
+            sectionItems("waiting", waiting, { it.id }, header = res.getString(R.string.waiting_for_arrival)) { item ->
                 WaitingRow(ui, item, onClick = { nav.navigate(Routes.payment(item.record.id)) }) {
                     FilledTonalIconButton(onClick = { arrivalFor = ArrivalTarget(item.record.id, item.line.member, item.open) }) {
                         Icon(Icons.Outlined.CheckCircle, stringResource(R.string.confirm_what_arrived))
@@ -124,8 +124,8 @@ fun OverviewScreen(session: GroupSession, showAllPayments: () -> Unit) {
 
         sectionItems(
             "balances", state.orderedMembers, { it.id },
-            header = context.getString(R.string.balances),
-            footer = if (summary.expected != summary.balances) ({ SectionFooter(context.getString(R.string.faint_bar_footer)) }) else null,
+            header = res.getString(R.string.balances),
+            footer = if (summary.expected != summary.balances) ({ SectionFooter(res.getString(R.string.faint_bar_footer)) }) else null,
         ) { m ->
             val b = summary.balances[m.id] ?: 0
             val e = summary.expected[m.id] ?: b
@@ -137,9 +137,10 @@ fun OverviewScreen(session: GroupSession, showAllPayments: () -> Unit) {
                 MemberAvatar(m.initial, isMe = m.id == ui.me)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OneLine(ui.name(m.id), modifier = Modifier.weight(1f, fill = false))
-                        if (!m.isClaimed) StatusBadge(stringResource(R.string.invited_badge))
-                        Spacer(Modifier.weight(1f))
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OneLine(ui.name(m.id), modifier = Modifier.weight(1f, fill = false))
+                            if (!m.isClaimed) StatusBadge(stringResource(R.string.invited_badge))
+                        }
                         Amount(ui.money(b, signed = true), tone = toneOf(b, zero = AmountTone.Pending))
                     }
                     BalanceBar(b, e, scale)
@@ -170,7 +171,7 @@ fun OverviewScreen(session: GroupSession, showAllPayments: () -> Unit) {
                 )
             }
         }
-        section("recent", header = context.getString(R.string.recent_payments), rows = rows)
+        section("recent", header = res.getString(R.string.recent_payments), rows = rows)
     }
 
     arrivalFor?.let { target -> ArrivalSheet(ui, target) { arrivalFor = null } }

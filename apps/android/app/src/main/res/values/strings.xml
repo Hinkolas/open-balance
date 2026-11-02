@@ -44,7 +44,6 @@
     <string name="a_member">a member</string>
     <string name="inconsistency_genesis">This group\'s first event is not a valid group creation.</string>
     <string name="waiting_for_arrival">Waiting for arrival</string>
-    <string name="arrived_action">Arrived</string>
     <string name="confirm_what_arrived">Confirm what arrived</string>
     <string name="balances">Balances</string>
     <string name="invited_badge">Invited</string>
@@ -222,7 +221,6 @@
     <string name="what_for_income">What for? e.g. Project Nordlicht</string>
     <string name="what_for_expense">What for? e.g. Dinner</string>
     <string name="date">Date</string>
-    <string name="amount">Amount</string>
     <string name="give_rest_to">Give the rest to …</string>
     <string name="total">Total</string>
     <string name="gets_the_rest">gets the rest</string>
@@ -256,7 +254,6 @@
     <string name="counts_as_arrives">Counts as the money arrives.</string>
     <string name="use_amount_or_percent" formatted="false">Use an amount or a percentage like 15%.</string>
     <string name="amount_or_percent" formatted="false">Amount or %</string>
-    <string name="percent_hint" formatted="false">0 or 15%</string>
     <plurals name="offline_waiting">
         <item quantity="one">Offline – %d change waiting</item>
         <item quantity="other">Offline – %d changes waiting</item>

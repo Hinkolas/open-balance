@@ -2,6 +2,7 @@ package io.github.hinkolas.openbalance.model
 
 import android.app.Application
 import android.content.Context
+import androidx.core.content.edit
 import io.github.hinkolas.openbalance.R
 import io.github.hinkolas.openbalance.sync.GroupSession
 import io.github.hinkolas.openbalance.sync.InviteLink
@@ -92,7 +93,7 @@ class AppModel(private val app: Application) {
 
     fun activate(id: UUID) {
         activeId.value = id
-        prefs.edit().putString("activeGroup", id.toString()).apply()
+        prefs.edit { putString("activeGroup", id.toString()) }
     }
 
     fun setForeground(on: Boolean) {

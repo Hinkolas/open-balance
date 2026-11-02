@@ -51,7 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -100,7 +100,7 @@ fun GroupScreen(session: GroupSession) {
     val ui = rememberGroupUi(session)
     val model = LocalAppModel.current
     val nav = LocalNav.current
-    val context = LocalContext.current
+    val res = LocalResources.current
     val activity = LocalActivity.current as FragmentActivity
     val scope = rememberCoroutineScope()
     val sessions by model.sessions.collectAsStateWithLifecycle()
@@ -111,23 +111,23 @@ fun GroupScreen(session: GroupSession) {
     var error by remember { mutableStateOf<String?>(null) }
 
     fun showInvite(member: MemberId) = scope.launch {
-        if (!DeviceOwner.confirm(activity, context.getString(R.string.confirm_owner_invite))) return@launch
+        if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_invite))) return@launch
         try {
             // Created on another device: issue a fresh invite.
             model.handoff.invite = session.inviteLink(member) ?: session.renewInvite(member)
             nav.navigate(Routes.INVITE)
         } catch (e: Exception) {
-            error = context.errorText(e)
+            error = res.errorText(e)
         }
     }
 
     fun showDeviceInvite() = scope.launch {
-        if (!DeviceOwner.confirm(activity, context.getString(R.string.confirm_owner_device))) return@launch
+        if (!DeviceOwner.confirm(activity, res.getString(R.string.confirm_owner_device))) return@launch
         try {
             model.handoff.invite = session.addDevice()
             nav.navigate(Routes.DEVICE_INVITE)
         } catch (e: Exception) {
-            error = context.errorText(e)
+            error = res.errorText(e)
         }
     }
 
@@ -140,8 +140,8 @@ fun GroupScreen(session: GroupSession) {
             add { ActionRow(Icons.Outlined.QrCode2, stringResource(R.string.add_device)) { showDeviceInvite() } }
         }
         section(
-            "members", header = context.getString(R.string.members), rows = memberRows,
-            footer = { SectionFooter(context.getString(if (ui.isAdmin) R.string.members_footer_admin else R.string.members_footer)) },
+            "members", header = res.getString(R.string.members), rows = memberRows,
+            footer = { SectionFooter(res.getString(if (ui.isAdmin) R.string.members_footer_admin else R.string.members_footer)) },
         )
 
         val groupRows = buildList<@Composable () -> Unit> {
@@ -149,7 +149,7 @@ fun GroupScreen(session: GroupSession) {
             add { Info(stringResource(R.string.server), credentials.server.toHttpUrlOrNull()?.host ?: credentials.server) }
             if (ui.isAdmin) add { ActionRow(Icons.Outlined.Edit, stringResource(R.string.rename_group)) { renaming = RenameTarget.Group(ui.state.name) } }
         }
-        section("this-group", header = context.getString(R.string.this_group), rows = groupRows)
+        section("this-group", header = res.getString(R.string.this_group), rows = groupRows)
 
         val yourGroups = buildList<@Composable () -> Unit> {
             for (s in sessions) add {
@@ -164,7 +164,7 @@ fun GroupScreen(session: GroupSession) {
             add { ActionRow(Icons.Outlined.QrCodeScanner, stringResource(R.string.join_with_invite)) { nav.navigate(Routes.JOIN) } }
             add { ActionRow(Icons.Outlined.Add, stringResource(R.string.create_group)) { nav.navigate(Routes.CREATE_GROUP) } }
         }
-        section("groups", header = context.getString(R.string.your_groups), rows = yourGroups)
+        section("groups", header = res.getString(R.string.your_groups), rows = yourGroups)
 
         val serverRows = buildList<@Composable () -> Unit> {
             for (s in servers) add {
@@ -180,8 +180,8 @@ fun GroupScreen(session: GroupSession) {
             add { ActionRow(Icons.Outlined.Dns, stringResource(R.string.add_server)) { nav.navigate(Routes.ADD_SERVER) } }
         }
         section(
-            "servers", header = context.getString(R.string.servers_you_own), rows = serverRows,
-            footer = { SectionFooter(context.getString(R.string.servers_footer)) },
+            "servers", header = res.getString(R.string.servers_you_own), rows = serverRows,
+            footer = { SectionFooter(res.getString(R.string.servers_footer)) },
         )
 
         section(
@@ -194,7 +194,7 @@ fun GroupScreen(session: GroupSession) {
                     headlineContent = { Text(stringResource(R.string.remove_from_device), color = Brand.negative) },
                 )
             }),
-            footer = { SectionFooter(context.getString(R.string.keys_on_device)) },
+            footer = { SectionFooter(res.getString(R.string.keys_on_device)) },
         )
     }
 

@@ -1,7 +1,7 @@
 # Test vectors
 
-The cross-platform contract. Every client implementation (Swift now, Kotlin
-and C# later) and the Go reference MUST pass all of them. Change a vector
+The cross-platform contract. Every client implementation (Swift and Kotlin now,
+C# later) and the Go reference MUST pass all of them. Change a vector
 together with `docs/PROTOCOL.md`, then the implementations.
 
 | File | Covers |

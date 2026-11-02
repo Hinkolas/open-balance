@@ -17,6 +17,9 @@ normative contract), then `docs/DESIGN.md`.
 - UI is native iOS (docs/DESIGN.md): system lists, controls, text styles and
   colors; `Theme.tint/positive/negative` and the components in the `Design`
   package for the brand layer. No hex colors or fixed font sizes in views.
+- Android UI is native Material 3 (docs/DESIGN.md, Android): `Brand`,
+  `AmountType` and the components in `app/…/design`; colors only in
+  `design/Theme.kt`, text sizes only from `MaterialTheme.typography`.
 - Product context for design work lives in `PRODUCT.md`.
 - UI copy in German and English (String Catalogs), German with informal "du".
 - `ADMIN_TOKEN`, group secrets and private keys never appear in logs.
@@ -30,3 +33,10 @@ After editing the catalog by hand, let Xcode normalize it so builds in Xcode
 don't rewrite it:
 `xcodebuild -exportLocalizations -project apps/apple/OpenBalance.xcodeproj -localizationPath /tmp/ob-l10n -exportLanguage de -skipPackagePluginValidation`.
 Strings used only in Swift packages (e.g. `FlowError`) are `"extractionState" : "manual"`.
+
+Android: Gradle project in `apps/android` (`./gradlew :ledger-core:test
+:ledger-sync:test :app:assembleDebug :app:lintDebug`). UI strings in
+`app/src/main/res/values/strings.xml`, German in `values-de/strings.xml`;
+keep both files in step. The Kotlin modules mirror the Swift packages
+(`ledger-core` = LedgerCore, `ledger-sync` = LedgerSync); a reducer change
+lands in both.

@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -137,6 +138,7 @@ fun JoinScreen() {
     val model = LocalAppModel.current
     val nav = LocalNav.current
     val context = LocalContext.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     val pending by model.pendingInvite.collectAsStateWithLifecycle()
     var link by remember { mutableStateOf<InviteLink?>(null) }
@@ -170,7 +172,7 @@ fun JoinScreen() {
                 model.join(l)
                 nav.popBackStack(Routes.MAIN, inclusive = false)
             } catch (e: Exception) {
-                error = context.errorText(e)
+                error = res.errorText(e)
             } finally {
                 joining = false
             }
@@ -204,7 +206,7 @@ fun JoinScreen() {
                         if (cameraAllowed) {
                             QrScanner(Modifier.fillMaxSize()) { scanned ->
                                 val parsed = InviteLink.parse(scanned)
-                                if (parsed != null) link = parsed else error = context.getString(R.string.not_an_invite_qr)
+                                if (parsed != null) link = parsed else error = res.getString(R.string.not_an_invite_qr)
                             }
                         } else {
                             Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxSize()) {
@@ -241,7 +243,7 @@ fun JoinScreen() {
                         val text = context.getSystemService(ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
                         if (text != null) {
                             pasted = text
-                            InviteLink.parse(text)?.let { link = it } ?: run { error = context.getString(R.string.not_an_invite_link) }
+                            InviteLink.parse(text)?.let { link = it } ?: run { error = res.getString(R.string.not_an_invite_link) }
                         }
                     }) {
                         Icon(Icons.Outlined.ContentPaste, null, Modifier.size(18.dp))
@@ -267,6 +269,7 @@ fun CreateGroupScreen() {
     val model = LocalAppModel.current
     val nav = LocalNav.current
     val context = LocalContext.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     val servers by model.servers.collectAsStateWithLifecycle()
     var server by rememberSaveable { mutableStateOf<String?>(null) }
@@ -291,7 +294,7 @@ fun CreateGroupScreen() {
                 model.create(s, name.trim().take(100), currency, myName.trim().take(100))
                 nav.popBackStack(Routes.MAIN, inclusive = false)
             } catch (e: Exception) {
-                error = context.errorText(e)
+                error = res.errorText(e)
             } finally {
                 working = false
             }
@@ -380,6 +383,7 @@ fun AddServerScreen() {
     val model = LocalAppModel.current
     val nav = LocalNav.current
     val context = LocalContext.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     var url by rememberSaveable { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
@@ -392,7 +396,7 @@ fun AddServerScreen() {
         if (!raw.contains("://")) raw = "https://$raw"
         raw = raw.trimEnd('/')
         if (raw.toHttpUrlOrNull()?.host.isNullOrEmpty()) {
-            error = context.getString(R.string.invalid_url)
+            error = res.getString(R.string.invalid_url)
             return
         }
         working = true
@@ -402,7 +406,7 @@ fun AddServerScreen() {
                 model.addServer(raw, token.trim())
                 nav.popBackStack()
             } catch (e: Exception) {
-                error = context.errorText(e)
+                error = res.errorText(e)
             } finally {
                 working = false
             }

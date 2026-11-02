@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -40,7 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -154,7 +155,7 @@ fun PaymentDetailScreen(session: GroupSession, paymentId: PaymentId) {
 
 @Composable
 private fun Content(ui: GroupUi, r: PaymentRecord, padding: androidx.compose.foundation.layout.PaddingValues, confirm: (ArrivalTarget) -> Unit) {
-    val context = LocalContext.current
+    val res = LocalResources.current
     val p = r.payment
     val arrivals = ui.state.arrivalsOf(p.id)
     val effect = Balances.effect(p, arrivals)
@@ -175,18 +176,18 @@ private fun Content(ui: GroupUi, r: PaymentRecord, padding: androidx.compose.fou
             }
         }
         p.note?.let { note ->
-            section("note", header = context.getString(R.string.note), rows = listOf<@Composable () -> Unit>({
+            section("note", header = res.getString(R.string.note), rows = listOf<@Composable () -> Unit>({
                 Text(note, modifier = Modifier.padding(16.dp))
             }))
         }
         sectionItems(
             "in", p.inSide.lines, { it.member },
-            header = context.getString(if (expense) R.string.for_side else R.string.received_by),
-            footer = if (p.track && !r.deleted) ({ SectionFooter(context.getString(R.string.only_confirmed_counts)) }) else null,
+            header = res.getString(if (expense) R.string.for_side else R.string.received_by),
+            footer = if (p.track && !r.deleted) ({ SectionFooter(res.getString(R.string.only_confirmed_counts)) }) else null,
         ) { line ->
             InRow(ui, p, line, held = effect.held[line.member] ?: 0, deleted = r.deleted, confirm = confirm)
         }
-        sectionItems("out", p.outSide.lines, { it.member }, header = context.getString(if (expense) R.string.paid_by else R.string.belongs_to)) { line ->
+        sectionItems("out", p.outSide.lines, { it.member }, header = res.getString(if (expense) R.string.paid_by else R.string.belongs_to)) { line ->
             ListItem(
                 colors = listItemColors(),
                 leadingContent = { MemberAvatar(ui.initial(line.member), isMe = line.member == ui.me) },
@@ -195,7 +196,7 @@ private fun Content(ui: GroupUi, r: PaymentRecord, padding: androidx.compose.fou
             )
         }
         if (arrivals.isNotEmpty()) {
-            sectionItems("arrivals", arrivals, { it.id }, header = context.getString(R.string.arrivals)) { a ->
+            sectionItems("arrivals", arrivals, { it.id }, header = res.getString(R.string.arrivals)) { a ->
                 ListItem(
                     colors = listItemColors(),
                     headlineContent = { OneLine(ui.name(a.member)) },
@@ -221,7 +222,7 @@ private fun Content(ui: GroupUi, r: PaymentRecord, padding: androidx.compose.fou
         }
         section(
             "info", rows = info,
-            footer = if (r.editedConcurrently) ({ SectionFooter(context.getString(R.string.edited_concurrently), Brand.negative) }) else null,
+            footer = if (r.editedConcurrently) ({ SectionFooter(res.getString(R.string.edited_concurrently), Brand.negative) }) else null,
         )
     }
 }
@@ -313,7 +314,7 @@ fun AmountField(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = imeAction),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }, onNext = { onDone() }),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(Brand.tint),
-            modifier = modifier.weight(1f, fill = false),
+            modifier = modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Min),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.Center) {
                     if (value.text.isEmpty()) Text("0", style = style.copy(color = MaterialTheme.colorScheme.outline))

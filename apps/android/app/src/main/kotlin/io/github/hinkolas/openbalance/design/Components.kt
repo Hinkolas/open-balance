@@ -272,6 +272,6 @@ val ListBottomPadding = PaddingValues(bottom = 96.dp)
 
 /** Single-line text that truncates instead of wrapping. */
 @Composable
-fun OneLine(text: String, style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = Color.Unspecified, modifier: Modifier = Modifier, maxLines: Int = 1) {
+fun OneLine(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = Color.Unspecified, maxLines: Int = 1) {
     Text(text, style = style, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
