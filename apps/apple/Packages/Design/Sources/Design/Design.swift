@@ -1,11 +1,55 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Native iOS with a light brand layer (docs/DESIGN.md): system colors, one
 /// tint, money set in rounded monospaced digits, and the balance line.
 nonisolated public enum Theme {
-    public static let tint = Color.indigo
-    public static let positive = Color.green
+    /// Brand emerald, matching the app icon. Also the positive color, so the
+    /// app has one green.
+    public static let tint = emerald
+    public static let positive = emerald
     public static let negative = Color.red
+
+    private static let emerald = Color.adaptive(
+        light: 0x1E9E62, dark: 0x3CCB82,
+        lightHighContrast: 0x148A54, darkHighContrast: 0x6EDCA2
+    )
+}
+
+nonisolated extension Color {
+    /// An sRGB color that follows light/dark mode and Increase Contrast.
+    static func adaptive(light: UInt32, dark: UInt32, lightHighContrast: UInt32, darkHighContrast: UInt32) -> Color {
+        func rgb(_ hex: UInt32) -> (CGFloat, CGFloat, CGFloat) {
+            (CGFloat((hex >> 16) & 0xFF) / 255, CGFloat((hex >> 8) & 0xFF) / 255, CGFloat(hex & 0xFF) / 255)
+        }
+        func pick(isDark: Bool, highContrast: Bool) -> (CGFloat, CGFloat, CGFloat) {
+            switch (isDark, highContrast) {
+            case (false, false): rgb(light)
+            case (true, false): rgb(dark)
+            case (false, true): rgb(lightHighContrast)
+            case (true, true): rgb(darkHighContrast)
+            }
+        }
+        #if canImport(UIKit)
+        return Color(uiColor: UIColor { traits in
+            let (r, g, b) = pick(isDark: traits.userInterfaceStyle == .dark, highContrast: traits.accessibilityContrast == .high)
+            return UIColor(red: r, green: g, blue: b, alpha: 1)
+        })
+        #else
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            let match = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua])
+            let (r, g, b) = pick(
+                isDark: match == .darkAqua || match == .accessibilityHighContrastDarkAqua,
+                highContrast: match == .accessibilityHighContrastAqua || match == .accessibilityHighContrastDarkAqua
+            )
+            return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+        })
+        #endif
+    }
 }
 
 public enum AmountTone: Sendable { case neutral, positive, negative, pending }

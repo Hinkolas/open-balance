@@ -60,8 +60,8 @@ Restrained: system backgrounds and labels, plus
 
 | Role | Value | Use |
 |---|---|---|
-| Tint | `Color.indigo` (system, adapts) | every interactive element, selection |
-| Positive | `Color.green` (system) | money owed to someone, arrived |
+| Tint | Emerald (`Theme.tint`; light/dark/high-contrast, matches the app icon) | every interactive element, selection |
+| Positive | Same emerald as the tint, so the app has one green | money owed to someone, arrived |
 | Negative | `Color.red` (system) | money someone owes, too much |
 | Pending | `.secondary` | expected, not arrived yet |
 
