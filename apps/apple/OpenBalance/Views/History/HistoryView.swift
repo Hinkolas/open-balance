@@ -126,6 +126,9 @@ struct HistoryView: View {
         case .groupRecoveryChanged:
             return .init(subject: .symbol("person.3"), badge: "key.horizontal", badgeColor: .gray, title: session.state.name,
                          detail: String(localized: "Recovery kit replaced by \(by)"))
+        case .groupEpochStarted:
+            return .init(subject: .symbol("person.3"), badge: "lock.rotation", badgeColor: .gray, title: session.state.name,
+                         detail: String(localized: "Keys renewed by \(by)"))
         case .memberAdded(let d):
             return .init(subject: member(d.id), title: memberName(d.id),
                          detail: String(localized: "Added by \(by)"))
@@ -199,6 +202,7 @@ struct HistoryView: View {
         case .alreadyClaimed: String(localized: "member already joined")
         case .badInviteSig: String(localized: "invite doesn't match")
         case .badRecoverySig: String(localized: "recovery kit doesn't match")
+        case .staleEpoch: String(localized: "written with an old key")
         }
     }
 }
@@ -308,7 +312,8 @@ enum HistoryFilter: CaseIterable, Hashable {
         case (.members, .groupCreated?), (.members, .groupUpdated?), (.members, .memberAdded?),
              (.members, .memberInviteRenewed?), (.members, .memberClaimed?), (.members, .memberUpdated?),
              (.members, .memberDeviceInvited?), (.members, .memberDeviceClaimed?), (.members, .memberDeviceInviteRevoked?),
-             (.members, .groupRecoveryChanged?), (.members, .memberDeviceRemoved?), (.members, .memberRecovered?): true
+             (.members, .groupRecoveryChanged?), (.members, .memberDeviceRemoved?), (.members, .memberRecovered?),
+             (.members, .groupEpochStarted?): true
         default: false
         }
     }

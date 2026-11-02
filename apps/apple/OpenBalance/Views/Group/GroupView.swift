@@ -417,7 +417,7 @@ struct InviteQRContent<Footer: View>: View {
             title: isDevice ? String(localized: "Add a device") : String(localized: "Invite \(name)"),
             message: isDevice
                 ? String(localized: "Scan this on the other device. It joins as \(me): it sees the group and writes as \(me). It works once, so show it only to the person you mean.")
-                : String(localized: "Let \(name) scan this with the iPhone camera. It works once and contains the group's key, so show it only to them."),
+                : String(localized: "Let \(name) scan this with the iPhone camera. It works once, and whoever scans it first joins the group, so show it only to them."),
             url: link.url, footer: { footer })
     }
 }

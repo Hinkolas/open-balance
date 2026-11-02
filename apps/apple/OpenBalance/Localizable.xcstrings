@@ -989,6 +989,16 @@
         }
       }
     },
+    "Keys renewed by %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel erneuert von %@"
+          }
+        }
+      }
+    },
     "Let someone create a group" : {
       "localizations" : {
         "de" : {
@@ -1289,12 +1299,12 @@
         }
       }
     },
-    "Let %@ scan this with the iPhone camera. It works once and contains the group's key, so show it only to them." : {
+    "Let %@ scan this with the iPhone camera. It works once, and whoever scans it first joins the group, so show it only to them." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lass %@ das mit der iPhone-Kamera scannen. Der Code funktioniert einmal und enthält den Schlüssel der Gruppe, zeig ihn also nur dieser Person."
+            "value" : "Lass %@ das mit der iPhone-Kamera scannen. Der Code funktioniert einmal, und wer ihn zuerst scannt, tritt der Gruppe bei. Zeig ihn also nur dieser Person."
           }
         }
       }
@@ -2267,6 +2277,17 @@
         }
       }
     },
+    "This device doesn't have the group's current key. Ask the admin or one of your other devices for a new invite." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät hat den aktuellen Schlüssel der Gruppe nicht. Bitte den Admin oder eins deiner anderen Geräte um eine neue Einladung."
+          }
+        }
+      }
+    },
     "This device was removed" : {
       "localizations" : {
         "de" : {
@@ -2639,6 +2660,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mit dem Admin-Token eines Servers kann dieses Gerät dort Gruppen erstellen und andere dort Gruppen erstellen lassen. Das Token gibt nie Zugriff auf die Inhalte einer Gruppe."
+          }
+        }
+      }
+    },
+    "written with an old key" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mit einem alten Schlüssel geschrieben"
           }
         }
       }
